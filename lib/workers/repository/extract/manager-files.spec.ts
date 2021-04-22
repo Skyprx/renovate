@@ -1,7 +1,6 @@
-import { getConfig, mocked } from '../../../../test/util';
-import { RenovateConfig } from '../../../config';
+import { fs, getConfig, getName, mocked } from '../../../../test/util';
+import type { RenovateConfig } from '../../../config/types';
 import * as _html from '../../../manager/html';
-import * as _fs from '../../../util/fs';
 import * as _fileMatch from './file-match';
 import { getManagerPackageFiles } from './manager-files';
 
@@ -9,11 +8,10 @@ jest.mock('./file-match');
 jest.mock('../../../manager/html');
 jest.mock('../../../util/fs');
 
-const fs: any = _fs;
 const fileMatch = mocked(_fileMatch);
 const html = mocked(_html);
 
-describe('workers/repository/extract/manager-files', () => {
+describe(getName(__filename), () => {
   describe('getManagerPackageFiles()', () => {
     let config: RenovateConfig;
     beforeEach(() => {
@@ -33,7 +31,7 @@ describe('workers/repository/extract/manager-files', () => {
     });
     it('skips files if null content returned', async () => {
       const managerConfig = { manager: 'npm', enabled: true };
-      fileMatch.getMatchingFiles.mockResolvedValue(['package.json']);
+      fileMatch.getMatchingFiles.mockReturnValue(['package.json']);
       const res = await getManagerPackageFiles(managerConfig);
       expect(res).toHaveLength(0);
     });
@@ -43,7 +41,7 @@ describe('workers/repository/extract/manager-files', () => {
         enabled: true,
         fileList: ['Dockerfile'],
       };
-      fileMatch.getMatchingFiles.mockResolvedValue(['Dockerfile']);
+      fileMatch.getMatchingFiles.mockReturnValue(['Dockerfile']);
       fs.readLocalFile.mockResolvedValueOnce('some content');
       html.extractPackageFile = jest.fn(() => ({
         deps: [{}, { replaceString: 'abc' }],
@@ -57,7 +55,7 @@ describe('workers/repository/extract/manager-files', () => {
         enabled: true,
         fileList: ['package.json'],
       };
-      fileMatch.getMatchingFiles.mockResolvedValue(['package.json']);
+      fileMatch.getMatchingFiles.mockReturnValue(['package.json']);
       fs.readLocalFile.mockResolvedValueOnce(
         '{"dependencies":{"chalk":"2.0.0"}}'
       );

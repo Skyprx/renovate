@@ -1,14 +1,15 @@
 import { quote } from 'shlex';
 import { dirname, join } from 'upath';
+import { TEMPORARY_ERROR } from '../../constants/error-messages';
 import { logger } from '../../logger';
-import { platform } from '../../platform';
 import { ExecOptions, exec } from '../../util/exec';
 import {
   getSiblingFileName,
   readLocalFile,
   writeLocalFile,
 } from '../../util/fs';
-import { UpdateArtifact, UpdateArtifactsResult } from '../common';
+import { getRepoStatus } from '../../util/git';
+import type { UpdateArtifact, UpdateArtifactsResult } from '../types';
 import { getCocoaPodsHome } from './utils';
 
 const pluginRegex = /^\s*plugin\s*(['"])(?<plugin>[^'"]+)\1/;
@@ -64,8 +65,7 @@ export async function updateArtifacts({
   const match = new RegExp(/^COCOAPODS: (?<cocoapodsVersion>.*)$/m).exec(
     existingLockFileContent
   );
-  const tagConstraint =
-    match && match.groups ? match.groups.cocoapodsVersion : null;
+  const tagConstraint = match?.groups?.cocoapodsVersion ?? null;
 
   const cmd = [...getPluginCommands(newPackageFileContent), 'pod install'];
   const execOptions: ExecOptions = {
@@ -74,7 +74,7 @@ export async function updateArtifacts({
       CP_HOME_DIR: await getCocoaPodsHome(config),
     },
     docker: {
-      image: 'renovate/cocoapods',
+      image: 'cocoapods',
       tagScheme: 'ruby',
       tagConstraint,
     },
@@ -83,6 +83,10 @@ export async function updateArtifacts({
   try {
     await exec(cmd, execOptions);
   } catch (err) {
+    // istanbul ignore if
+    if (err.message === TEMPORARY_ERROR) {
+      throw err;
+    }
     return [
       {
         artifactError: {
@@ -93,7 +97,7 @@ export async function updateArtifacts({
     ];
   }
 
-  const status = await platform.getRepoStatus();
+  const status = await getRepoStatus();
   if (!status.modified.includes(lockFileName)) {
     return null;
   }

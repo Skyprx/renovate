@@ -1,15 +1,15 @@
-import { RenovateConfig, getConfig } from '../../../../../test/util';
-import { BranchConfig } from '../../../common';
+import { RenovateConfig, getConfig, getName } from '../../../../../test/util';
+import type { BranchConfig } from '../../../types';
 import { getPrList } from './pr-list';
 
-describe('workers/repository/onboarding/pr/pr-list', () => {
+describe(getName(__filename), () => {
   describe('getPrList()', () => {
     let config: RenovateConfig;
     beforeEach(() => {
       jest.resetAllMocks();
       config = getConfig();
     });
-    it('handles emptyu', () => {
+    it('handles empty', () => {
       const branches: BranchConfig[] = [];
       const res = getPrList(config, branches);
       expect(res).toMatchSnapshot();

@@ -1,16 +1,13 @@
 import { logger } from '../logger';
-import versionings from './api.generated';
-import {
-  VersioningApi,
-  VersioningApiConstructor,
-  isVersioningApiConstructor,
-} from './common';
+import versionings from './api';
+import { isVersioningApiConstructor } from './common';
+import type { VersioningApi, VersioningApiConstructor } from './types';
 
-export * from './common';
+export * from './types';
 
 export const getVersioningList = (): string[] => Array.from(versionings.keys());
 /**
- * Get versioning map. Can be used to dynamically add new versionig type
+ * Get versioning map. Can be used to dynamically add new versioning type
  */
 export const getVersionings = (): Map<
   string,

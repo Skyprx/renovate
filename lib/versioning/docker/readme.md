@@ -8,8 +8,12 @@ Similarly, a user with `12.14` expects to be upgraded to `12.15` and not `12.15.
 
 **What type of versioning is used?**
 
-It's pretty "wild west" for tagging and not always compliant with semver. Docker versioning in Renovate should do a best effort to accept and sort semver-like versions.
+It's pretty "wild west" for tagging and not always compliant with SemVer. Docker versioning in Renovate should do a best effort to accept and sort SemVer-like versions.
 
 **Are ranges supported?**
 
 No. Although a tag like `12.15` might seem like it means `12.15.x`, it is a tag of its own and may or may not point to an of the available `12.15.x` tags, including `12.15.0`.
+
+**Are commit hashes supported?**
+
+No. An image tag that looks like a Git commit hash should be ignored by Renovate.

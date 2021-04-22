@@ -1,20 +1,26 @@
 import ignore from 'ignore';
 import { logger } from '../../logger';
-import { Pr, platform } from '../../platform';
+import { Pr } from '../../platform';
+import { readLocalFile } from '../../util/fs';
+import { getBranchFiles } from '../../util/git';
 
 export async function codeOwnersForPr(pr: Pr): Promise<string[]> {
+  logger.debug('Searching for CODEOWNERS file');
   try {
     const codeOwnersFile =
-      (await platform.getFile('CODEOWNERS', pr.targetBranch)) ||
-      (await platform.getFile('.github/CODEOWNERS', pr.targetBranch)) ||
-      (await platform.getFile('.gitlab/CODEOWNERS', pr.targetBranch)) ||
-      (await platform.getFile('docs/CODEOWNERS', pr.targetBranch));
+      (await readLocalFile('CODEOWNERS', 'utf8')) ||
+      (await readLocalFile('.github/CODEOWNERS', 'utf8')) ||
+      (await readLocalFile('.gitlab/CODEOWNERS', 'utf8')) ||
+      (await readLocalFile('docs/CODEOWNERS', 'utf8'));
 
     if (!codeOwnersFile) {
+      logger.debug('No CODEOWNERS file found');
       return [];
     }
 
-    const prFiles = await platform.getPrFiles(pr);
+    logger.debug(`Found CODEOWNERS file: ${codeOwnersFile}`);
+
+    const prFiles = await getBranchFiles(pr.sourceBranch);
     const rules = codeOwnersFile
       .split('\n')
       .map((line) => line.trim())
@@ -30,14 +36,23 @@ export async function codeOwnersForPr(pr: Pr): Promise<string[]> {
         };
       })
       .reverse();
-
+    logger.debug(
+      { prFiles, rules },
+      'PR files and rules to match for CODEOWNERS'
+    );
     const matchingRule = rules.find((rule) => prFiles?.every(rule.match));
     if (!matchingRule) {
+      logger.debug('No matching CODEOWNERS rule found');
       return [];
     }
+    logger.debug(
+      `CODEOWNERS matched the following usernames: ${JSON.stringify(
+        matchingRule.usernames
+      )}`
+    );
     return matchingRule.usernames;
   } catch (err) {
-    logger.warn({ err, pr }, 'Failed to determine code owners for PR.');
+    logger.warn({ err, pr }, 'Failed to determine CODEOWNERS for PR.');
     return [];
   }
 }

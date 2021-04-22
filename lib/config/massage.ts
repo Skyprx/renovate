@@ -1,7 +1,7 @@
 import is from '@sindresorhus/is';
 import { clone } from '../util/clone';
-import { PackageRule, RenovateConfig, UpdateType } from './common';
 import { getOptions } from './definitions';
+import type { PackageRule, RenovateConfig, UpdateType } from './types';
 
 const options = getOptions();
 
@@ -32,7 +32,7 @@ export function massageConfig(config: RenovateConfig): RenovateConfig {
             massageConfig(item as RenovateConfig)
           );
         } else {
-          (massagedConfig[key] as RenovateConfig[]).push(item);
+          (massagedConfig[key] as unknown[]).push(item);
         }
       });
     } else if (is.object(val) && key !== 'encrypted') {
@@ -57,10 +57,10 @@ export function massageConfig(config: RenovateConfig): RenovateConfig {
         PackageRule
       ][]) {
         if (updateTypes.includes(key)) {
-          const newRule = clone(rule);
-          newRule.updateTypes = rule.updateTypes || [];
-          newRule.updateTypes.push(key);
-          Object.assign(newRule, val);
+          let newRule = clone(rule);
+          newRule.matchUpdateTypes = rule.matchUpdateTypes || [];
+          newRule.matchUpdateTypes.push(key);
+          newRule = { ...newRule, ...val };
           newRules.push(newRule);
         }
       }

@@ -1,6 +1,6 @@
 import is from '@sindresorhus/is';
 import minimatch from 'minimatch';
-import { RenovateConfig } from '../../config';
+import type { GlobalConfig } from '../../config/types';
 import { logger } from '../../logger';
 import { platform } from '../../platform';
 
@@ -10,10 +10,10 @@ function repoName(value: string | { repository: string }): string {
 }
 
 export async function autodiscoverRepositories(
-  config: RenovateConfig
-): Promise<RenovateConfig> {
+  config: GlobalConfig
+): Promise<GlobalConfig> {
   if (!config.autodiscover) {
-    if (!(config.repositories && config.repositories.length)) {
+    if (!config.repositories?.length) {
       logger.warn(
         'No repositories found - did you want to run with flag --autodiscover?'
       );
@@ -22,7 +22,7 @@ export async function autodiscoverRepositories(
   }
   // Autodiscover list of repositories
   let discovered = await platform.getRepos();
-  if (!(discovered && discovered.length)) {
+  if (!discovered?.length) {
     // Soft fail (no error thrown) if no accessible repositories
     logger.debug(
       'The account associated with your token does not have access to any repos'
@@ -42,7 +42,7 @@ export async function autodiscoverRepositories(
     `Autodiscovered repositories`
   );
   // istanbul ignore if
-  if (config.repositories && config.repositories.length) {
+  if (config.repositories?.length) {
     logger.debug(
       'Checking autodiscovered repositories against configured repositories'
     );

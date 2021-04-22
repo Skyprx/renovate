@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs';
+import { getName } from '../../../test/util';
 import { extractPackageFile } from './extract';
 
 const file1 = readFileSync(
@@ -9,8 +10,12 @@ const file2 = readFileSync(
   'lib/manager/circleci/__fixtures__/config2.yml',
   'utf8'
 );
+const file3 = readFileSync(
+  'lib/manager/circleci/__fixtures__/config3.yml',
+  'utf8'
+);
 
-describe('lib/manager/circleci/extract', () => {
+describe(getName(__filename), () => {
   describe('extractPackageFile()', () => {
     it('returns null for empty', () => {
       expect(extractPackageFile('nothing here')).toBeNull();
@@ -24,6 +29,10 @@ describe('lib/manager/circleci/extract', () => {
       const res = extractPackageFile(file2);
       expect(res.deps).toMatchSnapshot();
       // expect(res.deps).toHaveLength(4);
+    });
+    it('extracts image without leading dash', () => {
+      const res = extractPackageFile(file3);
+      expect(res.deps).toMatchSnapshot();
     });
   });
 });

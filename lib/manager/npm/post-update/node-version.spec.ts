@@ -1,13 +1,13 @@
-import { mocked } from '../../../../test/util';
-import * as fs_ from '../../../util/fs';
+import { fs } from '../../../../test/util';
+import { isStable } from '../../../versioning/node';
 import { getNodeConstraint } from './node-version';
 
-const fs = mocked(fs_);
+jest.mock('../../../util/fs');
 
 describe('getNodeConstraint', () => {
   const config = {
     packageFile: 'package.json',
-    compatibility: { node: '^12.16.0' },
+    constraints: { node: '^12.16.0' },
   };
   it('returns package.json range', async () => {
     fs.readLocalFile = jest.fn();
@@ -15,6 +15,45 @@ describe('getNodeConstraint', () => {
     fs.readLocalFile.mockResolvedValueOnce(null);
     const res = await getNodeConstraint(config);
     expect(res).toEqual('^12.16.0');
+  });
+  it('augments to avoid node 15', async () => {
+    fs.readLocalFile = jest.fn();
+    fs.readLocalFile.mockResolvedValueOnce(null);
+    fs.readLocalFile.mockResolvedValueOnce(null);
+    const res = await getNodeConstraint({
+      ...config,
+      constraints: { node: '>= 12.16.0' },
+    });
+    const isAugmentedRange = res === '>= 12.16.0 <15';
+    const node16IsStable = isStable('16.100.0');
+    expect(isAugmentedRange || node16IsStable).toBe(true);
+  });
+  it('forces node 15 if v2 lockfile detected and constraint allows', async () => {
+    fs.readLocalFile.mockResolvedValueOnce(null);
+    fs.readLocalFile.mockResolvedValueOnce(null);
+    fs.readLocalFile.mockResolvedValueOnce('{"lockfileVersion":2}');
+    const res = await getNodeConstraint({
+      ...config,
+      constraints: { node: '>= 12.16.0' },
+    });
+    const isAugmentedRange = res === '>=15';
+    const node16IsStable = isStable('16.100.0');
+    expect(isAugmentedRange || node16IsStable).toBe(true);
+  });
+  it('forces node 15 if v2 lockfile detected and no constraint', async () => {
+    fs.readLocalFile.mockResolvedValueOnce(null);
+    fs.readLocalFile.mockResolvedValueOnce(null);
+    fs.readLocalFile.mockResolvedValueOnce('{"lockfileVersion":2}');
+    const res = await getNodeConstraint(
+      {
+        ...config,
+        constraints: {},
+      },
+      true
+    );
+    const isAugmentedRange = res === '>=15';
+    const node16IsStable = isStable('16.100.0');
+    expect(isAugmentedRange || node16IsStable).toBe(true);
   });
   it('returns .node-version value', async () => {
     fs.readLocalFile = jest.fn();
@@ -40,7 +79,7 @@ describe('getNodeConstraint', () => {
     fs.readLocalFile = jest.fn();
     fs.readLocalFile.mockResolvedValueOnce(null);
     fs.readLocalFile.mockResolvedValueOnce(null);
-    const res = await getNodeConstraint({ ...config, compatibility: null });
+    const res = await getNodeConstraint({ ...config, constraints: null });
     expect(res).toBeNull();
   });
 });

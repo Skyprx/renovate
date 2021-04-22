@@ -1,17 +1,18 @@
-import fs from 'fs';
-import path from 'path';
+import { readFileSync } from 'fs';
+import upath from 'upath';
+import { getName } from '../../../../test/util';
 import { getConfig } from '../../../config/defaults';
 import * as _fs from '../../../util/fs';
 import * as npmExtract from '.';
 
-const utilfs: any = _fs;
+const fs: any = _fs;
 
 // TODO: fix types
 const defaultConfig = getConfig();
 
 function readFixture(fixture: string) {
-  return fs.readFileSync(
-    path.resolve(__dirname, `../__fixtures__/${fixture}`),
+  return readFileSync(
+    upath.resolve(__dirname, `../__fixtures__/${fixture}`),
     'utf8'
   );
 }
@@ -22,10 +23,10 @@ const workspacesSimpleContent = readFixture('inputs/workspaces-simple.json');
 const vendorisedContent = readFixture('is-object.json');
 const invalidNameContent = readFixture('invalid-name.json');
 
-describe('manager/npm/extract', () => {
+describe(getName(__filename), () => {
   describe('.extractPackageFile()', () => {
     beforeEach(() => {
-      utilfs.readLocalFile = jest.fn(() => null);
+      fs.readLocalFile = jest.fn(() => null);
     });
     it('returns null if cannot parse', async () => {
       const res = await npmExtract.extractPackageFile(
@@ -85,7 +86,7 @@ describe('manager/npm/extract', () => {
       expect(res).toMatchSnapshot();
     });
     it('finds a lock file', async () => {
-      utilfs.readLocalFile = jest.fn((fileName) => {
+      fs.readLocalFile = jest.fn((fileName) => {
         if (fileName === 'yarn.lock') {
           return '# yarn.lock';
         }
@@ -99,7 +100,7 @@ describe('manager/npm/extract', () => {
       expect(res).toMatchSnapshot();
     });
     it('finds and filters .npmrc', async () => {
-      utilfs.readLocalFile = jest.fn((fileName) => {
+      fs.readLocalFile = jest.fn((fileName) => {
         if (fileName === '.npmrc') {
           return 'save-exact = true\npackage-lock = false\n';
         }
@@ -108,27 +109,41 @@ describe('manager/npm/extract', () => {
       const res = await npmExtract.extractPackageFile(
         input01Content,
         'package.json',
-        { global: {} }
+        {}
       );
       expect(res.npmrc).toBeDefined();
     });
-    it('finds and discards .npmrc', async () => {
-      utilfs.readLocalFile = jest.fn((fileName) => {
+    it('ignores .npmrc when config.npmrc is defined', async () => {
+      fs.readLocalFile = jest.fn((fileName) => {
         if (fileName === '.npmrc') {
-          // eslint-disable-next-line
-          return '//registry.npmjs.org/:_authToken=${NPM_AUTH_TOKEN}\n';
+          return 'some-npmrc\n';
         }
         return null;
       });
       const res = await npmExtract.extractPackageFile(
         input01Content,
         'package.json',
-        { global: {} }
+        { npmrc: 'some-configured-npmrc' }
       );
       expect(res.npmrc).toBeUndefined();
     });
+    it('finds and filters .npmrc with variables', async () => {
+      fs.readLocalFile = jest.fn((fileName) => {
+        if (fileName === '.npmrc') {
+          // eslint-disable-next-line
+          return 'registry=https://registry.npmjs.org\n//registry.npmjs.org/:_authToken=${NPM_AUTH_TOKEN}\n';
+        }
+        return null;
+      });
+      const res = await npmExtract.extractPackageFile(
+        input01Content,
+        'package.json',
+        {}
+      );
+      expect(res.npmrc).toEqual('registry=https://registry.npmjs.org\n');
+    });
     it('finds lerna', async () => {
-      utilfs.readLocalFile = jest.fn((fileName) => {
+      fs.readLocalFile = jest.fn((fileName) => {
         if (fileName === 'lerna.json') {
           return '{}';
         }
@@ -142,7 +157,7 @@ describe('manager/npm/extract', () => {
       expect(res).toMatchSnapshot();
     });
     it('finds "npmClient":"npm" in lerna.json', async () => {
-      utilfs.readLocalFile = jest.fn((fileName) => {
+      fs.readLocalFile = jest.fn((fileName) => {
         if (fileName === 'lerna.json') {
           return '{ "npmClient": "npm" }';
         }
@@ -156,7 +171,7 @@ describe('manager/npm/extract', () => {
       expect(res).toMatchSnapshot();
     });
     it('finds "npmClient":"yarn" in lerna.json', async () => {
-      utilfs.readLocalFile = jest.fn((fileName) => {
+      fs.readLocalFile = jest.fn((fileName) => {
         if (fileName === 'lerna.json') {
           return '{ "npmClient": "yarn" }';
         }
@@ -170,7 +185,7 @@ describe('manager/npm/extract', () => {
       expect(res).toMatchSnapshot();
     });
     it('finds simple yarn workspaces', async () => {
-      utilfs.readLocalFile = jest.fn((fileName) => {
+      fs.readLocalFile = jest.fn((fileName) => {
         if (fileName === 'lerna.json') {
           return '{}';
         }
@@ -183,8 +198,22 @@ describe('manager/npm/extract', () => {
       );
       expect(res).toMatchSnapshot();
     });
+    it('finds simple yarn workspaces with lerna.json and useWorkspaces: true', async () => {
+      fs.readLocalFile = jest.fn((fileName) => {
+        if (fileName === 'lerna.json') {
+          return '{"useWorkspaces": true}';
+        }
+        return null;
+      });
+      const res = await npmExtract.extractPackageFile(
+        workspacesSimpleContent,
+        'package.json',
+        defaultConfig
+      );
+      expect(res).toMatchSnapshot();
+    });
     it('finds complex yarn workspaces', async () => {
-      utilfs.readLocalFile = jest.fn((fileName) => {
+      fs.readLocalFile = jest.fn((fileName) => {
         if (fileName === 'lerna.json') {
           return '{}';
         }
@@ -215,6 +244,7 @@ describe('manager/npm/extract', () => {
           npm: '^8.0.0',
           pnpm: '^1.2.0',
           yarn: 'disabled',
+          vscode: '>=1.49.3',
         },
         main: 'index.js',
       };
@@ -312,7 +342,7 @@ describe('manager/npm/extract', () => {
   });
   describe('.postExtract()', () => {
     it('runs', async () => {
-      await expect(npmExtract.postExtract([])).resolves.not.toThrow();
+      await expect(npmExtract.postExtract([], false)).resolves.not.toThrow();
     });
   });
 });

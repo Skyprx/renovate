@@ -1,7 +1,8 @@
+import { getName } from '../../../../test/util';
 import { PLATFORM_TYPE_GITHUB } from '../../../constants/platforms';
 import * as hostRules from '../../../util/host-rules';
 import * as semverVersioning from '../../../versioning/semver';
-import { BranchUpgradeConfig } from '../../common';
+import type { BranchUpgradeConfig } from '../../types';
 import { ChangeLogError, getChangeLogJSON } from '.';
 
 jest.mock('../../../../lib/datasource/npm');
@@ -11,8 +12,8 @@ const upgrade: BranchUpgradeConfig = {
   depName: 'renovate',
   endpoint: 'https://api.github.com/',
   versioning: semverVersioning.id,
-  fromVersion: '1.0.0',
-  toVersion: '3.0.0',
+  currentVersion: '1.0.0',
+  newVersion: '3.0.0',
   sourceUrl: 'https://github.com/chalk/chalk',
   releases: [
     { version: '0.9.0' },
@@ -28,7 +29,7 @@ const upgrade: BranchUpgradeConfig = {
   ],
 };
 
-describe('workers/pr/changelog', () => {
+describe(getName(__filename), () => {
   describe('getChangeLogJSON', () => {
     beforeEach(() => {
       hostRules.clear();
@@ -42,11 +43,11 @@ describe('workers/pr/changelog', () => {
       expect(
         await getChangeLogJSON({
           ...upgrade,
-          fromVersion: null,
+          currentVersion: null,
         })
       ).toBeNull();
     });
-    it('returns null if no fromVersion', async () => {
+    it('returns null if no currentVersion', async () => {
       expect(
         await getChangeLogJSON({
           ...upgrade,
@@ -54,12 +55,12 @@ describe('workers/pr/changelog', () => {
         })
       ).toBeNull();
     });
-    it('returns null if fromVersion equals toVersion', async () => {
+    it('returns null if currentVersion equals newVersion', async () => {
       expect(
         await getChangeLogJSON({
           ...upgrade,
-          fromVersion: '1.0.0',
-          toVersion: '1.0.0',
+          currentVersion: '1.0.0',
+          newVersion: '1.0.0',
         })
       ).toBeNull();
     });

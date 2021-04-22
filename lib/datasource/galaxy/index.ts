@@ -1,23 +1,22 @@
 import { logger } from '../../logger';
-import * as globalCache from '../../util/cache/global';
+import { ExternalHostError } from '../../types/errors/external-host-error';
+import * as packageCache from '../../util/cache/package';
 import { Http } from '../../util/http';
-import {
-  DatasourceError,
-  GetReleasesConfig,
-  Release,
-  ReleaseResult,
-} from '../common';
+import type { GetReleasesConfig, Release, ReleaseResult } from '../types';
 
 export const id = 'galaxy';
+export const defaultRegistryUrls = ['https://galaxy.ansible.com/'];
+export const customRegistrySupport = false;
 
 const http = new Http(id);
 
 export async function getReleases({
   lookupName,
+  registryUrl,
 }: GetReleasesConfig): Promise<ReleaseResult | null> {
   const cacheNamespace = 'datasource-galaxy';
   const cacheKey = lookupName;
-  const cachedResult = await globalCache.get<ReleaseResult>(
+  const cachedResult = await packageCache.get<ReleaseResult>(
     cacheNamespace,
     cacheKey
   );
@@ -30,20 +29,19 @@ export async function getReleases({
   const userName = lookUp[0];
   const projectName = lookUp[1];
 
-  const baseUrl = 'https://galaxy.ansible.com/';
   const galaxyAPIUrl =
-    baseUrl +
+    registryUrl +
     'api/v1/roles/?owner__username=' +
     userName +
     '&name=' +
     projectName;
-  const galaxyProjectUrl = baseUrl + userName + '/' + projectName;
+  const galaxyProjectUrl = registryUrl + userName + '/' + projectName;
   try {
     let res: any = await http.get(galaxyAPIUrl);
     if (!res || !res.body) {
       logger.warn(
         { dependency: lookupName },
-        `Received invalid crate data from ${galaxyAPIUrl}`
+        `Received invalid data from ${galaxyAPIUrl}`
       );
       return null;
     }
@@ -60,7 +58,7 @@ export async function getReleases({
       return null;
     }
     if (response.results.length === 0) {
-      logger.warn(
+      logger.info(
         { dependency: lookupName },
         `Received no results from ${galaxyAPIUrl}`
       );
@@ -75,12 +73,9 @@ export async function getReleases({
     };
 
     result.dependencyUrl = galaxyProjectUrl;
-    if (resultObject.github_user && resultObject.github_repo) {
-      result.sourceUrl =
-        'https://github.com/' +
-        resultObject.github_user +
-        '/' +
-        resultObject.github_repo;
+    const { github_user: user = null, github_repo: repo = null } = resultObject;
+    if (typeof user === 'string' && typeof repo === 'string') {
+      result.sourceUrl = `https://github.com/${user}/${repo}`;
     }
 
     result.releases = versions.map(
@@ -94,15 +89,15 @@ export async function getReleases({
       }
     );
     const cacheMinutes = 10;
-    await globalCache.set(cacheNamespace, cacheKey, result, cacheMinutes);
+    await packageCache.set(cacheNamespace, cacheKey, result, cacheMinutes);
     return result;
   } catch (err) {
     if (
       err.statusCode === 429 ||
       (err.statusCode >= 500 && err.statusCode < 600)
     ) {
-      throw new DatasourceError(err);
+      throw new ExternalHostError(err);
     }
-    return null;
+    throw err;
   }
 }

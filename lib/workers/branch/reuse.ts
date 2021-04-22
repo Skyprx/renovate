@@ -1,6 +1,8 @@
-import { RenovateConfig } from '../../config';
+import { getAdminConfig } from '../../config/admin';
+import type { RenovateConfig } from '../../config/types';
 import { logger } from '../../logger';
 import { platform } from '../../platform';
+import { branchExists, isBranchModified, isBranchStale } from '../../util/git';
 
 type ParentBranch = {
   reuseExistingBranch: boolean;
@@ -12,8 +14,7 @@ export async function shouldReuseExistingBranch(
 ): Promise<ParentBranch> {
   const { branchName } = config;
   // Check if branch exists
-  const branchExists = await platform.branchExists(branchName);
-  if (!branchExists) {
+  if (!branchExists(branchName)) {
     logger.debug(`Branch needs creating`);
     return { reuseExistingBranch: false };
   }
@@ -23,18 +24,18 @@ export async function shouldReuseExistingBranch(
   const pr = await platform.getBranchPr(branchName);
 
   if (pr) {
-    if (pr.title && pr.title.startsWith('rebase!')) {
-      logger.debug('Manual rebase requested via PR title for #' + pr.number);
+    if (pr.title?.startsWith('rebase!')) {
+      logger.debug(`Manual rebase requested via PR title for #${pr.number}`);
       return { reuseExistingBranch: false };
     }
-    if (pr.body && pr.body.includes(`- [x] <!-- rebase-check -->`)) {
-      logger.debug('Manual rebase requested via PR checkbox for #' + pr.number);
+    if (pr.body?.includes(`- [x] <!-- rebase-check -->`)) {
+      logger.debug(`Manual rebase requested via PR checkbox for #${pr.number}`);
       return { reuseExistingBranch: false };
     }
-    if (pr.labels && pr.labels.includes(config.rebaseLabel)) {
-      logger.debug('Manual rebase requested via PR labels for #' + pr.number);
+    if (pr.labels?.includes(config.rebaseLabel)) {
+      logger.debug(`Manual rebase requested via PR labels for #${pr.number}`);
       // istanbul ignore if
-      if (config.dryRun) {
+      if (getAdminConfig().dryRun) {
         logger.info(
           `DRY-RUN: Would delete label ${config.rebaseLabel} from #${pr.number}`
         );
@@ -47,27 +48,31 @@ export async function shouldReuseExistingBranch(
 
   if (
     config.rebaseWhen === 'behind-base-branch' ||
-    (config.rebaseWhen === 'auto' && (await platform.getRepoForceRebase())) ||
-    (config.automerge && config.automergeType === 'branch')
+    (config.rebaseWhen === 'auto' &&
+      (config.automerge || (await platform.getRepoForceRebase())))
   ) {
-    const isBranchStale = await platform.isBranchStale(branchName);
-    if (isBranchStale) {
+    if (await isBranchStale(branchName)) {
       logger.debug(`Branch is stale and needs rebasing`);
       // We can rebase the branch only if no PR or PR can be rebased
-      if (!pr || !pr.isModified) {
-        return { reuseExistingBranch: false };
+      if (await isBranchModified(branchName)) {
+        // TODO: Warn here so that it appears in PR body
+        logger.debug('Cannot rebase branch as it has been modified');
+        return { reuseExistingBranch: true, isModified: true };
       }
-      // TODO: Warn here so that it appears in PR body
-      logger.debug('Cannot rebase branch');
-      return { reuseExistingBranch: true, isModified: true };
+      return { reuseExistingBranch: false };
     }
+    logger.debug('Branch is up-to-date');
+  } else {
+    logger.debug(
+      `Skipping stale branch check due to rebaseWhen=${config.rebaseWhen}`
+    );
   }
 
   // Now check if PR is unmergeable. If so then we also rebase
-  if (pr && pr.isConflicted) {
+  if (pr?.isConflicted) {
     logger.debug('PR is conflicted');
 
-    if (!pr.isModified) {
+    if ((await isBranchModified(branchName)) === false) {
       logger.debug(`Branch is not mergeable and needs rebasing`);
       if (config.rebaseWhen === 'never') {
         logger.debug('Rebasing disabled by config');

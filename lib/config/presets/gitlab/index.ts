@@ -1,8 +1,8 @@
-import { PLATFORM_FAILURE } from '../../../constants/error-messages';
 import { logger } from '../../../logger';
+import { ExternalHostError } from '../../../types/errors/external-host-error';
 import type { GitLabBranch } from '../../../types/platform/gitlab';
 import { GitlabHttp } from '../../../util/http/gitlab';
-import { Preset, PresetConfig } from '../common';
+import type { Preset, PresetConfig } from '../types';
 import { PRESET_DEP_NOT_FOUND, fetchPreset } from '../util';
 
 const gitlabApi = new GitlabHttp();
@@ -16,15 +16,15 @@ async function getDefaultBranchName(
 
   const res = await gitlabApi.getJson<GitLabBranch[]>(branchesUrl);
   const branches = res.body;
-  let defautlBranchName = 'master';
+  let defaultBranchName = 'master';
   for (const branch of branches) {
     if (branch.default) {
-      defautlBranchName = branch.name;
+      defaultBranchName = branch.name;
       break;
     }
   }
 
-  return defautlBranchName;
+  return defaultBranchName;
 }
 
 export async function fetchJSONFile(
@@ -32,35 +32,38 @@ export async function fetchJSONFile(
   fileName: string,
   endpoint: string
 ): Promise<Preset> {
+  let url = endpoint;
   try {
     const urlEncodedRepo = encodeURIComponent(repo);
     const urlEncodedPkgName = encodeURIComponent(fileName);
-    const defautlBranchName = await getDefaultBranchName(
+    const defaultBranchName = await getDefaultBranchName(
       urlEncodedRepo,
       endpoint
     );
-    const url = `${endpoint}projects/${urlEncodedRepo}/repository/files/${urlEncodedPkgName}/raw?ref=${defautlBranchName}`;
+    url += `projects/${urlEncodedRepo}/repository/files/${urlEncodedPkgName}/raw?ref=${defaultBranchName}`;
     return (await gitlabApi.getJson<Preset>(url)).body;
   } catch (err) {
-    if (err.message === PLATFORM_FAILURE) {
+    if (err instanceof ExternalHostError) {
       throw err;
     }
     logger.debug(
-      { statusCode: err.statusCode },
+      { statusCode: err.statusCode, url },
       `Failed to retrieve ${fileName} from repo`
     );
     throw new Error(PRESET_DEP_NOT_FOUND);
   }
 }
 
-export async function getPresetFromEndpoint(
+export function getPresetFromEndpoint(
   pkgName: string,
   presetName: string,
+  presetPath: string,
   endpoint = Endpoint
 ): Promise<Preset> {
   return fetchPreset({
     pkgName,
     filePreset: presetName,
+    presetPath,
     endpoint,
     fetch: fetchJSONFile,
   });
@@ -68,7 +71,8 @@ export async function getPresetFromEndpoint(
 
 export function getPreset({
   packageName: pkgName,
+  presetPath,
   presetName = 'default',
 }: PresetConfig): Promise<Preset> {
-  return getPresetFromEndpoint(pkgName, presetName, Endpoint);
+  return getPresetFromEndpoint(pkgName, presetName, presetPath, Endpoint);
 }

@@ -1,6 +1,6 @@
 import { logger } from '../../logger';
-import { PackageDependency, PackageFile } from '../common';
 import { getDep } from '../dockerfile/extract';
+import type { PackageDependency, PackageFile } from '../types';
 
 export function extractPackageFile(content: string): PackageFile | null {
   logger.trace('kubernetes.extractPackageFile()');
@@ -28,9 +28,7 @@ export function extractPackageFile(content: string): PackageFile | null {
       deps.push(dep);
     }
   }
-  deps = deps.filter(
-    (dep) => !(dep.currentValue && dep.currentValue.includes('${'))
-  );
+  deps = deps.filter((dep) => !dep.currentValue?.includes('${'));
   if (!deps.length) {
     return null;
   }

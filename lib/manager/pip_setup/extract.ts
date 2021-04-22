@@ -1,17 +1,16 @@
 import * as datasourcePypi from '../../datasource/pypi';
 import { logger } from '../../logger';
 import { SkipReason } from '../../types';
-import { resolveFile } from '../../util';
 import { exec } from '../../util/exec';
 import { BinarySource } from '../../util/exec/common';
 import { isSkipComment } from '../../util/ignore';
-import { ExtractConfig, PackageDependency, PackageFile } from '../common';
 import { dependencyPattern } from '../pip_requirements/extract';
+import type { ExtractConfig, PackageDependency, PackageFile } from '../types';
+import { PythonSetup, getExtractFile, parseReport } from './util';
 
-export const pythonVersions = ['python', 'python3', 'python3.8'];
+export const pythonVersions = ['python', 'python3', 'python3.8', 'python3.9'];
 let pythonAlias: string | null = null;
 
-// istanbul ignore next
 export function resetModule(): void {
   pythonAlias = null;
 }
@@ -22,7 +21,6 @@ export function parsePythonVersion(str: string): number[] {
 }
 
 export async function getPythonAlias(): Promise<string> {
-  // istanbul ignore if
   if (pythonAlias) {
     return pythonAlias;
   }
@@ -33,60 +31,35 @@ export async function getPythonAlias(): Promise<string> {
       const version = parsePythonVersion(stdout || stderr);
       if (version[0] >= 3 && version[1] >= 7) {
         pythonAlias = pythonVersion;
+        break;
       }
-    } catch (err) /* istanbul ignore next */ {
+    } catch (err) {
       logger.debug(`${pythonVersion} alias not found`);
     }
   }
   return pythonAlias;
 }
-interface PythonSetup {
-  extras_require: string[];
-  install_requires: string[];
-}
-
-let extractPy;
 
 export async function extractSetupFile(
   _content: string,
   packageFile: string,
   config: ExtractConfig
 ): Promise<PythonSetup> {
-  const cwd = config.localDir;
-  let cmd: string;
-  const file = await resolveFile('data/extract.py');
-  const args = [`"${file}"`, `"${packageFile}"`];
-  if (config.binarySource === BinarySource.Docker) {
-    logger.debug('Running python via docker');
-    await exec(`docker pull renovate/pip`);
-    extractPy = extractPy || (await resolveFile('data/extract.py'));
-    cmd = 'docker';
-    args.unshift(
-      'run',
-      '-i',
-      '--rm',
-      // volume
-      '-v',
-      `${cwd}:${cwd}`,
-      '-v',
-      `${extractPy}:${extractPy}`,
-      // cwd
-      '-w',
-      cwd,
-      // image
-      'renovate/pip',
-      'python'
-    );
-  } else {
+  let cmd = 'python';
+  const extractPy = await getExtractFile();
+  const args = [`"${extractPy}"`, `"${packageFile}"`];
+  if (config.binarySource !== BinarySource.Docker) {
     logger.debug('Running python via global command');
     cmd = await getPythonAlias();
   }
   logger.debug({ cmd, args }, 'python command');
   const res = await exec(`${cmd} ${args.join(' ')}`, {
-    cwd,
-    timeout: 5000,
+    cwdFile: packageFile,
+    timeout: 30000,
+    docker: {
+      image: 'python',
+    },
   });
-  // istanbul ignore if
   if (res.stderr) {
     const stderr = res.stderr
       .replace(/.*\n\s*import imp/, '')
@@ -96,7 +69,7 @@ export async function extractSetupFile(
       logger.warn({ stdout: res.stdout, stderr }, 'Error in read setup file');
     }
   }
-  return JSON.parse(res.stdout);
+  return parseReport(packageFile);
 }
 
 export async function extractPackageFile(
@@ -110,6 +83,8 @@ export async function extractPackageFile(
     setup = await extractSetupFile(content, packageFile, config);
   } catch (err) {
     logger.warn({ err, content, packageFile }, 'Failed to read setup.py file');
+  }
+  if (!setup) {
     return null;
   }
   const requires: string[] = [];
@@ -156,7 +131,6 @@ export async function extractPackageFile(
         ? a.depName.localeCompare(b.depName)
         : a.managerData.lineNumber - b.managerData.lineNumber
     );
-  // istanbul ignore if
   if (!deps.length) {
     return null;
   }

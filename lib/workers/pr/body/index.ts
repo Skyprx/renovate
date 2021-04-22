@@ -1,21 +1,27 @@
 import { platform } from '../../../platform';
 import * as template from '../../../util/template';
 import { get } from '../../../versioning';
-import { BranchConfig } from '../../common';
-import { getPrBanner } from './banner';
+import type { BranchConfig } from '../../types';
 import { getChangelogs } from './changelogs';
 import { getPrConfigDescription } from './config-description';
 import { getControls } from './controls';
 import { getPrFooter } from './footer';
+import { getPrHeader } from './header';
 import { getPrExtraNotes, getPrNotes } from './notes';
 import { getPrUpdatesTable } from './updates-table';
 
 function massageUpdateMetadata(config: BranchConfig): void {
   config.upgrades.forEach((upgrade) => {
     /* eslint-disable no-param-reassign */
-    const { homepage, sourceUrl, sourceDirectory, changelogUrl } = upgrade;
+    const {
+      homepage,
+      sourceUrl,
+      sourceDirectory,
+      changelogUrl,
+      dependencyUrl,
+    } = upgrade;
     let depNameLinked = upgrade.depName;
-    const primaryLink = homepage || sourceUrl;
+    const primaryLink = homepage || sourceUrl || dependencyUrl;
     if (primaryLink) {
       depNameLinked = `[${depNameLinked}](${primaryLink})`;
     }
@@ -48,12 +54,12 @@ function massageUpdateMetadata(config: BranchConfig): void {
       references.push(`[changelog](${changelogUrl})`);
     }
     upgrade.references = references.join(', ');
-    const { fromVersion, toVersion, updateType, versioning } = upgrade;
+    const { currentVersion, newVersion, updateType, versioning } = upgrade;
     // istanbul ignore if
     if (updateType === 'minor') {
       try {
         const version = get(versioning);
-        if (version.getMinor(fromVersion) === version.getMinor(toVersion)) {
+        if (version.getMinor(currentVersion) === version.getMinor(newVersion)) {
           upgrade.updateType = 'patch';
         }
       } catch (err) {
@@ -67,20 +73,18 @@ function massageUpdateMetadata(config: BranchConfig): void {
 export async function getPrBody(config: BranchConfig): Promise<string> {
   massageUpdateMetadata(config);
   const content = {
-    banner: getPrBanner(config),
+    header: getPrHeader(config),
     table: getPrUpdatesTable(config),
     notes: getPrNotes(config) + getPrExtraNotes(config),
     changelogs: getChangelogs(config),
     configDescription: await getPrConfigDescription(config),
-    controls: getControls(),
+    controls: await getControls(config),
     footer: getPrFooter(config),
   };
-  const defaultPrBodyTemplate =
-    '{{{banner}}}{{{table}}}{{{notes}}}{{{changelogs}}}{{{configDescription}}}{{{controls}}}{{{footer}}}';
-  const prBodyTemplate = config.prBodyTemplate || defaultPrBodyTemplate;
+  const prBodyTemplate = config.prBodyTemplate;
   let prBody = template.compile(prBodyTemplate, content, false);
   prBody = prBody.trim();
   prBody = prBody.replace(/\n\n\n+/g, '\n\n');
-  prBody = platform.getPrBody(prBody);
+  prBody = platform.massageMarkdown(prBody);
   return prBody;
 }

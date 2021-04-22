@@ -1,12 +1,12 @@
-import { RenovateConfig, getConfig } from '../../../test/util';
+import { RenovateConfig, getConfig, getName } from '../../../test/util';
 import {
+  CONFIG_SECRETS_EXPOSED,
   CONFIG_VALIDATION,
-  DATASOURCE_FAILURE,
+  EXTERNAL_HOST_ERROR,
   MANAGER_LOCKFILE_ERROR,
-  MANAGER_NO_PACKAGE_FILES,
+  NO_VULNERABILITY_ALERTS,
   PLATFORM_AUTHENTICATION_ERROR,
   PLATFORM_BAD_CREDENTIALS,
-  PLATFORM_FAILURE,
   PLATFORM_INTEGRATION_UNAUTHORIZED,
   PLATFORM_RATE_LIMIT_EXCEEDED,
   REPOSITORY_ACCESS_FORBIDDEN,
@@ -19,15 +19,15 @@ import {
   REPOSITORY_FORKED,
   REPOSITORY_MIRRORED,
   REPOSITORY_NOT_FOUND,
-  REPOSITORY_NO_VULNERABILITY,
+  REPOSITORY_NO_PACKAGE_FILES,
   REPOSITORY_RENAMED,
-  REPOSITORY_TEMPORARY_ERROR,
   REPOSITORY_UNINITIATED,
   SYSTEM_INSUFFICIENT_DISK_SPACE,
   SYSTEM_INSUFFICIENT_MEMORY,
+  TEMPORARY_ERROR,
   UNKNOWN_ERROR,
 } from '../../constants/error-messages';
-import { DatasourceError } from '../../datasource/common';
+import { ExternalHostError } from '../../types/errors/external-host-error';
 import handleError from './error';
 
 jest.mock('./error-config');
@@ -38,7 +38,7 @@ beforeEach(() => {
   config = getConfig();
 });
 
-describe('workers/repository/error', () => {
+describe(getName(__filename), () => {
   describe('handleError()', () => {
     const errors = [
       REPOSITORY_UNINITIATED,
@@ -46,9 +46,9 @@ describe('workers/repository/error', () => {
       REPOSITORY_DISABLED,
       REPOSITORY_CHANGED,
       REPOSITORY_FORKED,
-      MANAGER_NO_PACKAGE_FILES,
+      REPOSITORY_NO_PACKAGE_FILES,
+      CONFIG_SECRETS_EXPOSED,
       CONFIG_VALIDATION,
-      DATASOURCE_FAILURE,
       REPOSITORY_ARCHIVED,
       REPOSITORY_MIRRORED,
       REPOSITORY_RENAMED,
@@ -60,12 +60,11 @@ describe('workers/repository/error', () => {
       MANAGER_LOCKFILE_ERROR,
       SYSTEM_INSUFFICIENT_DISK_SPACE,
       SYSTEM_INSUFFICIENT_MEMORY,
-      PLATFORM_FAILURE,
-      REPOSITORY_NO_VULNERABILITY,
+      NO_VULNERABILITY_ALERTS,
       REPOSITORY_CANNOT_FORK,
       PLATFORM_INTEGRATION_UNAUTHORIZED,
       PLATFORM_AUTHENTICATION_ERROR,
-      REPOSITORY_TEMPORARY_ERROR,
+      TEMPORARY_ERROR,
     ];
     errors.forEach((err) => {
       it(`errors ${err}`, async () => {
@@ -73,23 +72,33 @@ describe('workers/repository/error', () => {
         expect(res).toEqual(err);
       });
     });
-    it(`handles DatasourceError`, async () => {
-      const res = await handleError(config, new DatasourceError(new Error()));
-      expect(res).toEqual(DATASOURCE_FAILURE);
+    it(`handles ExternalHostError`, async () => {
+      const res = await handleError(
+        config,
+        new ExternalHostError(new Error(), 'some-host-type')
+      );
+      expect(res).toEqual(EXTERNAL_HOST_ERROR);
     });
     it('rewrites git 5xx error', async () => {
       const gitError = new Error(
         "fatal: unable to access 'https://**redacted**@gitlab.com/learnox/learnox.git/': The requested URL returned error: 500\n"
       );
       const res = await handleError(config, gitError);
-      expect(res).toEqual(PLATFORM_FAILURE);
+      expect(res).toEqual(EXTERNAL_HOST_ERROR);
     });
     it('rewrites git remote error', async () => {
       const gitError = new Error(
         'fatal: remote error: access denied or repository not exported: /b/nw/bd/27/47/159945428/108610112.git\n'
       );
       const res = await handleError(config, gitError);
-      expect(res).toEqual(PLATFORM_FAILURE);
+      expect(res).toEqual(EXTERNAL_HOST_ERROR);
+    });
+    it('rewrites git fatal error', async () => {
+      const gitError = new Error(
+        'fatal: not a git repository (or any parent up to mount point /mnt)\nStopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).\n'
+      );
+      const res = await handleError(config, gitError);
+      expect(res).toEqual(TEMPORARY_ERROR);
     });
     it('handles unknown error', async () => {
       const res = await handleError(config, new Error('abcdefg'));

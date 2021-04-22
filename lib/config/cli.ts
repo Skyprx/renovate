@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { version } from '../../package.json';
-import { RenovateOptions, getOptions } from './definitions';
+import { getOptions } from './definitions';
+import type { GlobalConfig, RenovateOptions } from './types';
 
 export function getCliName(option: Partial<RenovateOptions>): string {
   if (option.cli === false) {
@@ -14,7 +15,7 @@ export interface RenovateCliConfig extends Record<string, any> {
   repositories?: string[];
 }
 
-export function getConfig(input: string[]): RenovateCliConfig {
+export function getConfig(input: string[]): GlobalConfig {
   // massage migrated configuration keys
   const argv = input
     .map((a) =>
@@ -107,7 +108,7 @@ export function getConfig(input: string[]): RenovateCliConfig {
     .version(version, '-v, --version')
     .on('--help', helpConsole)
     .action((repositories: string[], opts: Record<string, unknown>) => {
-      if (repositories && repositories.length) {
+      if (repositories?.length) {
         config.repositories = repositories;
       }
 

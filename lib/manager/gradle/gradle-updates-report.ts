@@ -1,5 +1,5 @@
-import { join } from 'path';
 import { exists, readFile, writeFile } from 'fs-extra';
+import { join } from 'upath';
 import * as datasourceSbtPackage from '../../datasource/sbt-package';
 import { logger } from '../../logger';
 
@@ -19,7 +19,6 @@ interface GradleDependency {
 
 type GradleDependencyWithRepos = GradleDependency & { repos: string[] };
 
-// TODO: Unify with GradleDependency ?
 export interface BuildDependency {
   name: string;
   depGroup: string;
@@ -102,7 +101,7 @@ function mergeDependenciesWithRepositories(
   }));
 }
 
-function flatternDependencies(
+function flattenDependencies(
   accumulator: GradleDependencyWithRepos[],
   currentValue: GradleDependencyWithRepos[]
 ): GradleDependencyWithRepos[] {
@@ -117,13 +116,13 @@ function combineReposOnDuplicatedDependencies(
   const existingDependency = accumulator.find(
     (dep) => dep.name === currentValue.name && dep.group === currentValue.group
   );
-  if (!existingDependency) {
-    accumulator.push(currentValue);
-  } else {
+  if (existingDependency) {
     const nonExistingRepos = currentValue.repos.filter(
       (repo) => !existingDependency.repos.includes(repo)
     );
     existingDependency.repos.push(...nonExistingRepos);
+  } else {
+    accumulator.push(currentValue);
   }
   return accumulator;
 }
@@ -147,7 +146,7 @@ export async function extractDependenciesFromUpdatesReport(
 
   const dependencies = gradleProjectConfigurations
     .map(mergeDependenciesWithRepositories, [])
-    .reduce(flatternDependencies, [])
+    .reduce(flattenDependencies, [])
     .reduce(combineReposOnDuplicatedDependencies, []);
 
   return dependencies

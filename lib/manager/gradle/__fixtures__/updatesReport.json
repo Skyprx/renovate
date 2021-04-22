@@ -30,6 +30,21 @@
         "name": "scala-logging_%%",
         "group": "com.typesafe.scala-logging",
         "version": "3.9.0"
+      },
+      {
+        "name": "foo",
+        "group": "foo",
+        "version": null
+      },
+      {
+        "name": "bar",
+        "group": "bar",
+        "version": null
+      },
+      {
+        "name": "baz",
+        "group": "baz",
+        "version": null
       }
     ]
   }

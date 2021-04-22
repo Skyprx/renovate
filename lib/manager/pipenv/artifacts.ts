@@ -1,21 +1,26 @@
-import { ensureDir, outputFile, readFile, remove } from 'fs-extra';
-import { join } from 'upath';
+import { quote } from 'shlex';
+import { TEMPORARY_ERROR } from '../../constants/error-messages';
 import { logger } from '../../logger';
-import { platform } from '../../platform';
 import { ExecOptions, exec } from '../../util/exec';
-import { readLocalFile } from '../../util/fs';
 import {
+  deleteLocalFile,
+  ensureCacheDir,
+  readLocalFile,
+  writeLocalFile,
+} from '../../util/fs';
+import { getRepoStatus } from '../../util/git';
+import type {
   UpdateArtifact,
   UpdateArtifactsConfig,
   UpdateArtifactsResult,
-} from '../common';
+} from '../types';
 
 function getPythonConstraint(
   existingLockFileContent: string,
   config: UpdateArtifactsConfig
 ): string | undefined | null {
-  const { compatibility = {} } = config;
-  const { python } = compatibility;
+  const { constraints = {} } = config;
+  const { python } = constraints;
 
   if (python) {
     logger.debug('Using python constraint from config');
@@ -24,15 +29,45 @@ function getPythonConstraint(
   try {
     const pipfileLock = JSON.parse(existingLockFileContent);
     if (pipfileLock?._meta?.requires?.python_version) {
-      return '== ' + pipfileLock._meta.requires.python_version + '.*';
+      const pythonVersion: string = pipfileLock._meta.requires.python_version;
+      return `== ${pythonVersion}.*`;
     }
     if (pipfileLock?._meta?.requires?.python_full_version) {
-      return '== ' + pipfileLock._meta.requires.python_full_version;
+      const pythonFullVersion: string =
+        pipfileLock._meta.requires.python_full_version;
+      return `== ${pythonFullVersion}`;
     }
   } catch (err) {
     // Do nothing
   }
   return undefined;
+}
+
+function getPipenvConstraint(
+  existingLockFileContent: string,
+  config: UpdateArtifactsConfig
+): string | null {
+  const { constraints = {} } = config;
+  const { pipenv } = constraints;
+
+  if (pipenv) {
+    logger.debug('Using pipenv constraint from config');
+    return pipenv;
+  }
+  try {
+    const pipfileLock = JSON.parse(existingLockFileContent);
+    if (pipfileLock?.default?.pipenv?.version) {
+      const pipenvVersion: string = pipfileLock.default.pipenv.version;
+      return pipenvVersion;
+    }
+    if (pipfileLock?.develop?.pipenv?.version) {
+      const pipenvVersion: string = pipfileLock.develop.pipenv.version;
+      return pipenvVersion;
+    }
+  } catch (err) {
+    // Do nothing
+  }
+  return '';
 }
 
 export async function updateArtifacts({
@@ -42,9 +77,7 @@ export async function updateArtifacts({
 }: UpdateArtifact): Promise<UpdateArtifactsResult[] | null> {
   logger.debug(`pipenv.updateArtifacts(${pipfileName})`);
 
-  const cacheDir =
-    process.env.PIPENV_CACHE_DIR || join(config.cacheDir, './others/pipenv');
-  await ensureDir(cacheDir);
+  const cacheDir = await ensureCacheDir('./others/pipenv', 'PIPENV_CACHE_DIR');
   logger.debug('Using pipenv cache ' + cacheDir);
 
   const lockFileName = pipfileName + '.lock';
@@ -54,30 +87,35 @@ export async function updateArtifacts({
     return null;
   }
   try {
-    const localPipfileFileName = join(config.localDir, pipfileName);
-    await outputFile(localPipfileFileName, newPipfileContent);
-    const localLockFileName = join(config.localDir, lockFileName);
+    await writeLocalFile(pipfileName, newPipfileContent);
     if (config.isLockFileMaintenance) {
-      await remove(localLockFileName);
+      await deleteLocalFile(lockFileName);
     }
     const cmd = 'pipenv lock';
     const tagConstraint = getPythonConstraint(existingLockFileContent, config);
+    const pipenvConstraint = getPipenvConstraint(
+      existingLockFileContent,
+      config
+    );
     const execOptions: ExecOptions = {
+      cwdFile: pipfileName,
       extraEnv: {
         PIPENV_CACHE_DIR: cacheDir,
       },
       docker: {
-        image: 'renovate/python',
+        image: 'python',
         tagConstraint,
         tagScheme: 'pep440',
-        preCommands: ['pip install --user pipenv'],
+        preCommands: [
+          `pip install --user ${quote(`pipenv${pipenvConstraint}`)}`,
+        ],
         volumes: [cacheDir],
       },
     };
     logger.debug({ cmd }, 'pipenv lock command');
     await exec(cmd, execOptions);
-    const status = await platform.getRepoStatus();
-    if (!(status && status.modified.includes(lockFileName))) {
+    const status = await getRepoStatus();
+    if (!status?.modified.includes(lockFileName)) {
       return null;
     }
     logger.debug('Returning updated Pipfile.lock');
@@ -85,11 +123,15 @@ export async function updateArtifacts({
       {
         file: {
           name: lockFileName,
-          contents: await readFile(localLockFileName, 'utf8'),
+          contents: await readLocalFile(lockFileName, 'utf8'),
         },
       },
     ];
   } catch (err) {
+    // istanbul ignore if
+    if (err.message === TEMPORARY_ERROR) {
+      throw err;
+    }
     logger.debug({ err }, 'Failed to update Pipfile.lock');
     return [
       {

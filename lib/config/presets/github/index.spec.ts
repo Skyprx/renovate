@@ -1,7 +1,7 @@
-import * as httpMock from '../../../../test/httpMock';
+import * as httpMock from '../../../../test/http-mock';
 import { getName, mocked } from '../../../../test/util';
 import * as _hostRules from '../../../util/host-rules';
-import { PRESET_NOT_FOUND } from '../util';
+import { PRESET_INVALID_JSON, PRESET_NOT_FOUND } from '../util';
 import * as github from '.';
 
 jest.mock('../../../util/host-rules');
@@ -43,9 +43,9 @@ describe(getName(__filename), () => {
       httpMock
         .scope(githubApiHost)
         .get(`${basePath}/default.json`)
-        .reply(500, {})
+        .reply(404, {})
         .get(`${basePath}/renovate.json`)
-        .reply(500, {});
+        .reply(200, {});
 
       await expect(
         github.getPreset({ packageName: 'some/repo' })
@@ -61,7 +61,7 @@ describe(getName(__filename), () => {
 
       await expect(
         github.getPreset({ packageName: 'some/repo' })
-      ).rejects.toThrow('invalid preset JSON');
+      ).rejects.toThrow(PRESET_INVALID_JSON);
       expect(httpMock.getTrace()).toMatchSnapshot();
     });
 
@@ -75,7 +75,7 @@ describe(getName(__filename), () => {
 
       await expect(
         github.getPreset({ packageName: 'some/repo' })
-      ).rejects.toThrow('invalid preset JSON');
+      ).rejects.toThrow(PRESET_INVALID_JSON);
       expect(httpMock.getTrace()).toMatchSnapshot();
     });
 
@@ -132,17 +132,27 @@ describe(getName(__filename), () => {
         .reply(200, {
           content: Buffer.from('{"foo":"bar"}').toString('base64'),
         });
+      const content = await github.getPreset({
+        packageName: 'some/repo',
+        presetName: 'custom',
+      });
+      expect(content).toEqual({ foo: 'bar' });
+      expect(httpMock.getTrace()).toMatchSnapshot();
+    });
 
-      try {
-        global.appMode = true;
-        const content = await github.getPreset({
-          packageName: 'some/repo',
-          presetName: 'custom',
+    it('should query custom paths', async () => {
+      httpMock
+        .scope(githubApiHost)
+        .get(`${basePath}/path/custom.json`)
+        .reply(200, {
+          content: Buffer.from('{"foo":"bar"}').toString('base64'),
         });
-        expect(content).toEqual({ foo: 'bar' });
-      } finally {
-        delete global.appMode;
-      }
+      const content = await github.getPreset({
+        packageName: 'some/repo',
+        presetName: 'custom',
+        presetPath: 'path',
+      });
+      expect(content).toEqual({ foo: 'bar' });
       expect(httpMock.getTrace()).toMatchSnapshot();
     });
 
@@ -153,18 +163,12 @@ describe(getName(__filename), () => {
         .reply(200, {
           content: Buffer.from('{}').toString('base64'),
         });
-
-      try {
-        global.appMode = true;
-        await expect(
-          github.getPreset({
-            packageName: 'some/repo',
-            presetName: 'somefile/somename/somesubname',
-          })
-        ).rejects.toThrow(PRESET_NOT_FOUND);
-      } finally {
-        delete global.appMode;
-      }
+      await expect(
+        github.getPreset({
+          packageName: 'some/repo',
+          presetName: 'somefile/somename/somesubname',
+        })
+      ).rejects.toThrow(PRESET_NOT_FOUND);
       expect(httpMock.getTrace()).toMatchSnapshot();
     });
   });
@@ -178,7 +182,7 @@ describe(getName(__filename), () => {
           content: Buffer.from('{"from":"api"}').toString('base64'),
         });
       expect(
-        await github.getPresetFromEndpoint('some/repo', 'default')
+        await github.getPresetFromEndpoint('some/repo', 'default', undefined)
       ).toEqual({ from: 'api' });
       expect(httpMock.getTrace()).toMatchSnapshot();
     });
@@ -195,6 +199,7 @@ describe(getName(__filename), () => {
           .getPresetFromEndpoint(
             'some/repo',
             'default',
+            undefined,
             'https://api.github.example.org'
           )
           .catch(() => ({ from: 'api' }))

@@ -1,11 +1,11 @@
-import { URLSearchParams } from 'url';
-import { PR_STATE_CLOSED } from '../../constants/pull-requests';
-import { BranchStatus } from '../../types';
+import { BranchStatus, PrState } from '../../types';
 import { GiteaHttp, GiteaHttpOptions } from '../../util/http/gitea';
+import { getQueryString } from '../../util/url';
+import { PrReviewersParams } from './types';
 
 const giteaHttp = new GiteaHttp();
 
-export type PRState = 'open' | 'closed' | 'all';
+export type PRState = PrState.Open | PrState.Closed | PrState.All;
 export type IssueState = 'open' | 'closed' | 'all';
 export type CommitStatusType =
   | 'pending'
@@ -33,6 +33,11 @@ export interface PR {
     sha: string;
     repo?: Repo;
   };
+  assignee?: {
+    login?: string;
+  };
+  assignees?: any[];
+  user?: { username?: string };
 }
 
 export interface Issue {
@@ -127,9 +132,10 @@ export interface CombinedCommitStatus {
 
 export type RepoSearchParams = {
   uid?: number;
+  archived?: boolean;
 };
 
-export type IssueCreateParams = {} & IssueUpdateParams;
+export type IssueCreateParams = IssueUpdateParams;
 
 export type IssueUpdateParams = {
   title?: string;
@@ -164,7 +170,7 @@ export type PRMergeParams = {
   Do: PRMergeMethod;
 };
 
-export type CommentCreateParams = {} & CommentUpdateParams;
+export type CommentCreateParams = CommentUpdateParams;
 
 export type CommentUpdateParams = {
   body: string;
@@ -187,20 +193,6 @@ const commitStatusStates: CommitStatusType[] = [
   'error',
 ];
 
-function queryParams(params: Record<string, any>): URLSearchParams {
-  const usp = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (Array.isArray(v)) {
-      for (const item of v) {
-        usp.append(k, item.toString());
-      }
-    } else {
-      usp.append(k, v.toString());
-    }
-  }
-  return usp;
-}
-
 export async function getCurrentUser(
   options?: GiteaHttpOptions
 ): Promise<User> {
@@ -209,11 +201,17 @@ export async function getCurrentUser(
   return res.body;
 }
 
+export async function getVersion(options?: GiteaHttpOptions): Promise<string> {
+  const url = 'version';
+  const res = await giteaHttp.getJson<{ version: string }>(url, options);
+  return res.body.version;
+}
+
 export async function searchRepos(
   params: RepoSearchParams,
   options?: GiteaHttpOptions
 ): Promise<Repo[]> {
-  const query = queryParams(params).toString();
+  const query = getQueryString(params);
   const url = `repos/search?${query}`;
   const res = await giteaHttp.getJson<RepoSearchResults>(url, {
     ...options,
@@ -244,7 +242,7 @@ export async function getRepoContents(
   ref?: string,
   options?: GiteaHttpOptions
 ): Promise<RepoContents> {
-  const query = queryParams(ref ? { ref } : {}).toString();
+  const query = getQueryString(ref ? { ref } : {});
   const url = `repos/${repoPath}/contents/${urlEscape(filePath)}?${query}`;
   const res = await giteaHttp.getJson<RepoContents>(url, options);
 
@@ -291,7 +289,7 @@ export async function closePR(
 ): Promise<void> {
   await updatePR(repoPath, idx, {
     ...options,
-    state: PR_STATE_CLOSED,
+    state: PrState.Closed,
   });
 }
 
@@ -319,12 +317,25 @@ export async function getPR(
   return res.body;
 }
 
+export async function requestPrReviewers(
+  repoPath: string,
+  idx: number,
+  params: PrReviewersParams,
+  options?: GiteaHttpOptions
+): Promise<void> {
+  const url = `repos/${repoPath}/pulls/${idx}/requested_reviewers`;
+  await giteaHttp.postJson(url, {
+    ...options,
+    body: params,
+  });
+}
+
 export async function searchPRs(
   repoPath: string,
   params: PRSearchParams,
   options?: GiteaHttpOptions
 ): Promise<PR[]> {
-  const query = queryParams(params).toString();
+  const query = getQueryString(params);
   const url = `repos/${repoPath}/pulls?${query}`;
   const res = await giteaHttp.getJson<PR[]>(url, {
     ...options,
@@ -379,7 +390,7 @@ export async function searchIssues(
   params: IssueSearchParams,
   options?: GiteaHttpOptions
 ): Promise<Issue[]> {
-  const query = queryParams(params).toString();
+  const query = getQueryString({ ...params, type: 'issues' });
   const url = `repos/${repoPath}/issues?${query}`;
   const res = await giteaHttp.getJson<Issue[]>(url, {
     ...options,
@@ -452,7 +463,7 @@ export async function updateComment(
 }
 
 export async function deleteComment(
-  repoPath,
+  repoPath: string,
   idx: number,
   options?: GiteaHttpOptions
 ): Promise<void> {
@@ -461,7 +472,7 @@ export async function deleteComment(
 }
 
 export async function getComments(
-  repoPath,
+  repoPath: string,
   issue: number,
   options?: GiteaHttpOptions
 ): Promise<Comment[]> {

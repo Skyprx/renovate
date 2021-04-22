@@ -1,4 +1,4 @@
-import { Preset } from '../common';
+import type { Preset } from '../types';
 
 export const presets: Record<string, Preset> = {
   enableRenovate: {
@@ -14,6 +14,24 @@ export const presets: Record<string, Preset> = {
     major: {
       enabled: false,
     },
+  },
+  disableDomain: {
+    description: 'Disable requests to a particular domain',
+    hostRules: [
+      {
+        domainName: '{{arg0}}',
+        enabled: false,
+      },
+    ],
+  },
+  disableHost: {
+    description: 'Disable requests to a particular hostName',
+    hostRules: [
+      {
+        hostName: '{{arg0}}',
+        enabled: false,
+      },
+    ],
   },
   ignoreModulesAndTests: {
     description:
@@ -49,11 +67,11 @@ export const presets: Record<string, Preset> = {
       'Pin dependency versions for all except <code>peerDependencies</code>',
     packageRules: [
       {
-        packagePatterns: ['*'],
+        matchPackagePatterns: ['*'],
         rangeStrategy: 'pin',
       },
       {
-        depTypeList: ['engines', 'peerDependencies'],
+        matchDepTypes: ['engines', 'peerDependencies'],
         rangeStrategy: 'auto',
       },
     ],
@@ -62,7 +80,7 @@ export const presets: Record<string, Preset> = {
     description: 'Pin dependency versions for <code>dependencies</code>',
     packageRules: [
       {
-        depTypeList: ['dependencies'],
+        matchDepTypes: ['dependencies'],
         rangeStrategy: 'pin',
       },
     ],
@@ -71,7 +89,7 @@ export const presets: Record<string, Preset> = {
     description: 'Pin dependency versions for <code>devDependencies</code>',
     packageRules: [
       {
-        depTypeList: ['devDependencies'],
+        matchDepTypes: ['devDependencies'],
         rangeStrategy: 'pin',
       },
     ],
@@ -81,15 +99,15 @@ export const presets: Record<string, Preset> = {
       'Pin dependency versions for <code>devDependencies</code> and retain semver ranges for others',
     packageRules: [
       {
-        packagePatterns: ['*'],
+        matchPackagePatterns: ['*'],
         rangeStrategy: 'replace',
       },
       {
-        depTypeList: ['devDependencies'],
+        matchDepTypes: ['devDependencies'],
         rangeStrategy: 'pin',
       },
       {
-        depTypeList: ['peerDependencies'],
+        matchDepTypes: ['peerDependencies'],
         rangeStrategy: 'widen',
       },
     ],
@@ -143,7 +161,7 @@ export const presets: Record<string, Preset> = {
       'Do not renovate <code>peerDependencies</code> versions/ranges',
     packageRules: [
       {
-        depTypeList: ['peerDependencies'],
+        matchDepTypes: ['peerDependencies'],
         enabled: false,
       },
     ],
@@ -152,7 +170,7 @@ export const presets: Record<string, Preset> = {
     description: 'Do not renovate <code>devDependencies</code> versions/ranges',
     packageRules: [
       {
-        depTypeList: ['devDependencies'],
+        matchDepTypes: ['devDependencies'],
         enabled: false,
       },
     ],
@@ -168,11 +186,11 @@ export const presets: Record<string, Preset> = {
       'If semantic commits detected, use semantic commit type <code>fix</code> for dependencies and <code>chore</code> for all others',
     packageRules: [
       {
-        packagePatterns: ['*'],
+        matchPackagePatterns: ['*'],
         semanticCommitType: 'chore',
       },
       {
-        depTypeList: ['dependencies'],
+        matchDepTypes: ['dependencies', 'require'],
         semanticCommitType: 'fix',
       },
     ],
@@ -182,7 +200,7 @@ export const presets: Record<string, Preset> = {
       'If semantic commits detected, use semantic commit type <code>{{arg0}}</code> for all',
     packageRules: [
       {
-        packagePatterns: ['*'],
+        matchPackagePatterns: ['*'],
         semanticCommitType: '{{arg0}}',
       },
     ],
@@ -191,16 +209,6 @@ export const presets: Record<string, Preset> = {
     description:
       'Rebase existing PRs any time the base branch has been updated',
     rebaseWhen: 'behind-base-branch',
-  },
-  unpublishSafe: {
-    description:
-      'Set a status check to warn when upgrades <  24 hours old might get unpublished',
-    unpublishSafe: true,
-  },
-  unpublishSafeDisabled: {
-    description:
-      "Create branches/PRs for dependency upgrades as soon as they're available",
-    unpublishSafe: false,
   },
   prImmediately: {
     description: 'Raise PRs immediately (after branch is created)',
@@ -296,16 +304,6 @@ export const presets: Record<string, Preset> = {
       'If automerging, push the new commit directly to base branch (no PR)',
     automergeType: 'branch',
   },
-  automergeBranchMergeCommit: {
-    description:
-      'If automerging, perform a merge-commit on branch (no PR) - deprecated, use :automergeBranch instead',
-    automergeType: 'branch-merge-commit',
-  },
-  automergeBranchPush: {
-    description:
-      'If automerging, push the new commit directly to base branch (no PR) - deprecated, use :automergeBranch instead',
-    automergeType: 'branch-push',
-  },
   automergePr: {
     description: 'Raise a PR first before any automerging',
     automergeType: 'pr',
@@ -333,7 +331,7 @@ export const presets: Record<string, Preset> = {
     description: 'Run lock file maintenance (updates) early Monday mornings',
     lockFileMaintenance: {
       enabled: true,
-      extends: 'schedule:weekly',
+      extends: ['schedule:weekly'],
     },
   },
   maintainLockFilesMonthly: {
@@ -341,7 +339,7 @@ export const presets: Record<string, Preset> = {
       'Run lock file maintenance (updates) on the first day of each month',
     lockFileMaintenance: {
       enabled: true,
-      extends: 'schedule:monthly',
+      extends: ['schedule:monthly'],
     },
   },
   ignoreUnstable: {
@@ -383,7 +381,7 @@ export const presets: Record<string, Preset> = {
     description: 'Update @types/* packages automatically if tests pass',
     packageRules: [
       {
-        packagePatterns: ['^@types/'],
+        matchPackagePrefixes: ['@types/'],
         automerge: true,
       },
     ],
@@ -392,7 +390,7 @@ export const presets: Record<string, Preset> = {
     description: 'Disable version pinning for <code>{{arg0}}</code>',
     packageRules: [
       {
-        packageNames: ['{{arg0}}'],
+        matchPackageNames: ['{{arg0}}'],
         rangeStrategy: 'replace',
       },
     ],
@@ -492,11 +490,11 @@ export const presets: Record<string, Preset> = {
   },
   semanticCommits: {
     description: 'Use semantic prefixes for commit messages and PR titles',
-    semanticCommits: true,
+    semanticCommits: 'enabled',
   },
   semanticCommitsDisabled: {
     description: 'Disable semantic prefixes for commit messages and PR titles',
-    semanticCommits: false,
+    semanticCommits: 'disabled',
   },
   disableLockFiles: {
     description: 'Disable lock file updates',
@@ -516,18 +514,18 @@ export const presets: Record<string, Preset> = {
       'Always widen peerDependencies semver ranges when updating, instead of replacing',
     packageRules: [
       {
-        depTypeList: ['peerDependencies'],
+        matchDepTypes: ['peerDependencies'],
         rangeStrategy: 'widen',
       },
     ],
   },
-  masterIssue: {
-    description: 'Enable Renovate master issue creation',
-    masterIssue: true,
+  dependencyDashboard: {
+    description: 'Enable Renovate Dependency Dashboard creation',
+    dependencyDashboard: true,
   },
-  masterIssueApproval: {
-    description: 'Enable Renovate master issue approval workflow',
-    masterIssueApproval: true,
+  dependencyDashboardApproval: {
+    description: 'Enable Renovate Dependency Dashboard approval workflow',
+    dependencyDashboardApproval: true,
   },
   timezone: {
     description: 'Evaluate schedules according to timezone {{arg0}}',
@@ -538,7 +536,7 @@ export const presets: Record<string, Preset> = {
       'Use semanticCommitType {{arg0}} for all package files matching path {{arg1}}',
     packageRules: [
       {
-        paths: ['{{arg0}}'],
+        matchPaths: ['{{arg0}}'],
         semanticCommitType: '{{arg1}}',
       },
     ],
@@ -548,7 +546,7 @@ export const presets: Record<string, Preset> = {
       'For package <code>{{arg0}}</code>, strictly follow release tag <code>{{arg1}}</code>',
     packageRules: [
       {
-        packageNames: ['{{arg0}}'],
+        matchPackageNames: ['{{arg0}}'],
         followTag: '{{arg1}}',
       },
     ],
@@ -564,16 +562,24 @@ export const presets: Record<string, Preset> = {
       },
     ],
   },
-  base: {
-    description: 'deprecated alias for config:base',
-    extends: ['config:base'],
+  disablePrControls: {
+    description: 'Remove the checkbox controls from PRs',
+    prBodyTemplate:
+      '{{{header}}}{{{table}}}{{{notes}}}{{{changelogs}}}{{{configDescription}}}{{{footer}}}',
   },
-  app: {
-    description: 'deprecated alias for config:js-app',
-    extends: ['config:js-app'],
+  enableGradleLite: {
+    description: 'Enable the gradle-lite manager',
+    'gradle-lite': {
+      enabled: true,
+    },
   },
-  library: {
-    description: 'deprecated alias for config:js-lib',
-    extends: ['config:js-lib'],
+  switchToGradleLite: {
+    description: 'Enable the gradle-lite manager and disable gradle',
+    gradle: {
+      enabled: false,
+    },
+    'gradle-lite': {
+      enabled: true,
+    },
   },
 };

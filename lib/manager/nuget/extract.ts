@@ -1,95 +1,84 @@
-import * as path from 'path';
-import findUp from 'find-up';
-import { readFile } from 'fs-extra';
-import { XmlDocument } from 'xmldoc';
+import { XmlDocument, XmlElement, XmlNode } from 'xmldoc';
 import * as datasourceNuget from '../../datasource/nuget';
 import { logger } from '../../logger';
-import { SkipReason } from '../../types';
-import { clone } from '../../util/clone';
-import { get } from '../../versioning';
-import * as semverVersioning from '../../versioning/semver';
-import { ExtractConfig, PackageDependency, PackageFile } from '../common';
-import { DotnetToolsManifest } from './types';
+import { getSiblingFileName, localPathExists } from '../../util/fs';
+import { hasKey } from '../../util/object';
+import type { ExtractConfig, PackageDependency, PackageFile } from '../types';
+import type { DotnetToolsManifest } from './types';
+import { getConfiguredRegistries } from './util';
 
-async function readFileAsXmlDocument(file: string): Promise<XmlDocument> {
-  try {
-    return new XmlDocument(await readFile(file, 'utf8'));
-  } catch (err) {
-    logger.debug({ err }, `failed to parse '${file}' as XML document`);
-    return undefined;
-  }
+/**
+ * https://docs.microsoft.com/en-us/nuget/concepts/package-versioning
+ * This article mentions that  Nuget 3.x and later tries to restore the lowest possible version
+ * regarding to given version range.
+ * 1.3.4 equals [1.3.4,)
+ * Due to guarantee that an update of package version will result in its usage by the next restore + build operation,
+ * only following constrained versions make sense
+ * 1.3.4, [1.3.4], [1.3.4, ], [1.3.4, )
+ * The update of the right boundary does not make sense regarding to the lowest version restore rule,
+ * so we don't include it in the extracting regexp
+ */
+const checkVersion = /^\s*(?:[[])?(?:(?<currentValue>[^"(,[\]]+)\s*(?:,\s*[)\]]|])?)\s*$/;
+const elemNames = new Set([
+  'PackageReference',
+  'PackageVersion',
+  'DotNetCliToolReference',
+  'GlobalPackageReference',
+]);
+
+function isXmlElem(node: XmlNode): boolean {
+  return hasKey('name', node);
 }
 
-async function determineRegistryUrls(
-  packageFile: string,
-  localDir: string
-): Promise<string[]> {
-  // Valid file names taken from https://github.com/NuGet/NuGet.Client/blob/f64621487c0b454eda4b98af853bf4a528bef72a/src/NuGet.Core/NuGet.Configuration/Settings/Settings.cs#L34
-  const nuGetConfigFileNames = ['nuget.config', 'NuGet.config', 'NuGet.Config'];
-  const nuGetConfigPath = await findUp(nuGetConfigFileNames, {
-    cwd: path.dirname(path.join(localDir, packageFile)),
-    type: 'file',
-  });
+function extractDepsFromXml(xmlNode: XmlDocument): PackageDependency[] {
+  const results: PackageDependency[] = [];
+  const todo: XmlElement[] = [xmlNode];
+  while (todo.length) {
+    const child = todo.pop();
+    const { name, attr } = child;
 
-  if (nuGetConfigPath?.startsWith(localDir) !== true) {
-    return undefined;
-  }
-
-  logger.debug({ nuGetConfigPath }, 'found NuGet.config');
-  const nuGetConfig = await readFileAsXmlDocument(nuGetConfigPath);
-  if (!nuGetConfig) {
-    return undefined;
-  }
-
-  const packageSources = nuGetConfig.childNamed('packageSources');
-  if (!packageSources) {
-    return undefined;
-  }
-
-  const registryUrls = clone(datasourceNuget.defaultRegistryUrls);
-  for (const child of packageSources.children) {
-    if (child.type === 'element') {
-      if (child.name === 'clear') {
-        logger.debug(`clearing registry URLs`);
-        registryUrls.length = 0;
-      } else if (child.name === 'add') {
-        const isHttpUrl = /^https?:\/\//i.test(child.attr.value);
-        if (isHttpUrl) {
-          let registryUrl = child.attr.value;
-          if (child.attr.protocolVersion) {
-            registryUrl += `#protocolVersion=${child.attr.protocolVersion}`;
-          }
-          logger.debug({ registryUrl }, 'adding registry URL');
-          registryUrls.push(registryUrl);
-        } else {
-          logger.debug(
-            { registryUrl: child.attr.value },
-            'ignoring local registry URL'
-          );
-        }
+    if (elemNames.has(name)) {
+      const depName = attr?.Include || attr?.Update;
+      const version =
+        attr?.Version ||
+        child.valueWithPath('Version') ||
+        attr?.VersionOverride ||
+        child.valueWithPath('VersionOverride');
+      const currentValue = checkVersion
+        ?.exec(version)
+        ?.groups?.currentValue?.trim();
+      if (depName && currentValue) {
+        results.push({
+          datasource: datasourceNuget.id,
+          depType: 'nuget',
+          depName,
+          currentValue,
+        });
       }
-      // child.name === 'remove' not supported
+    } else {
+      todo.push(...(child.children.filter(isXmlElem) as XmlElement[]));
     }
   }
-  return registryUrls;
+  return results;
 }
 
-const packageRe = /<(?:PackageReference|DotNetCliToolReference).*Include\s*=\s*"([^"]+)".*Version\s*=\s*"(?:[[])?(?:([^"(,[\]]+)\s*(?:,\s*[)\]]|])?)"/;
 export async function extractPackageFile(
   content: string,
   packageFile: string,
   config: ExtractConfig
 ): Promise<PackageFile | null> {
   logger.trace({ packageFile }, 'nuget.extractPackageFile()');
-  const { isVersion } = get(config.versioning || semverVersioning.id);
-  const deps: PackageDependency[] = [];
 
-  const registryUrls = await determineRegistryUrls(
+  const registries = await getConfiguredRegistries(
     packageFile,
     config.localDir
   );
+  const registryUrls = registries
+    ? registries.map((registry) => registry.url)
+    : undefined;
 
   if (packageFile.endsWith('.config/dotnet-tools.json')) {
+    const deps: PackageDependency[] = [];
     let manifest: DotnetToolsManifest;
 
     try {
@@ -123,37 +112,21 @@ export async function extractPackageFile(
     return { deps };
   }
 
-  for (const line of content.split('\n')) {
-    /**
-     * https://docs.microsoft.com/en-us/nuget/concepts/package-versioning
-     * This article mentions that  Nuget 3.x and later tries to restore the lowest possible version
-     * regarding to given version range.
-     * 1.3.4 equals [1.3.4,)
-     * Due to guarantee that an update of package version will result in its usage by the next restore + build operation,
-     * only following constrained versions make sense
-     * 1.3.4, [1.3.4], [1.3.4, ], [1.3.4, )
-     * The update of the right boundary does not make sense regarding to the lowest version restore rule,
-     * so we don't include it in the extracting regexp
-     */
-
-    const match = packageRe.exec(line);
-    if (match) {
-      const depName = match[1];
-      const currentValue = match[2];
-      const dep: PackageDependency = {
-        depType: 'nuget',
-        depName,
-        currentValue,
-        datasource: datasourceNuget.id,
-      };
-      if (registryUrls) {
-        dep.registryUrls = registryUrls;
-      }
-      if (!isVersion(currentValue)) {
-        dep.skipReason = SkipReason.NotAVersion;
-      }
-      deps.push(dep);
-    }
+  let deps: PackageDependency[] = [];
+  try {
+    const parsedXml = new XmlDocument(content);
+    deps = extractDepsFromXml(parsedXml).map((dep) => ({
+      ...dep,
+      ...(registryUrls && { registryUrls }),
+    }));
+  } catch (err) {
+    logger.debug({ err }, `Failed to parse ${packageFile}`);
   }
-  return { deps };
+  const res: PackageFile = { deps };
+  const lockFileName = getSiblingFileName(packageFile, 'packages.lock.json');
+  // istanbul ignore if
+  if (await localPathExists(lockFileName)) {
+    res.lockFiles = [lockFileName];
+  }
+  return res;
 }

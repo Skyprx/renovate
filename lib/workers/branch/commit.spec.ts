@@ -1,8 +1,11 @@
-import { defaultConfig, partial, platform } from '../../../test/util';
-import { BranchConfig } from '../common';
+import { defaultConfig, getName, git, partial } from '../../../test/util';
+import { setAdminConfig } from '../../config/admin';
+import type { BranchConfig } from '../types';
 import { commitFilesToBranch } from './commit';
 
-describe('workers/branch/automerge', () => {
+jest.mock('../../util/git');
+
+describe(getName(__filename), () => {
   describe('commitFilesToBranch', () => {
     let config: BranchConfig;
     beforeEach(() => {
@@ -10,18 +13,19 @@ describe('workers/branch/automerge', () => {
         ...defaultConfig,
         branchName: 'renovate/some-branch',
         commitMessage: 'some commit message',
-        semanticCommits: false,
+        semanticCommits: 'disabled',
         semanticCommitType: 'a',
         semanticCommitScope: 'b',
         updatedPackageFiles: [],
         updatedArtifacts: [],
       });
       jest.resetAllMocks();
-      platform.commitFiles.mockResolvedValueOnce('abc123');
+      git.commitFiles.mockResolvedValueOnce('abc123');
+      setAdminConfig();
     });
     it('handles empty files', async () => {
       await commitFilesToBranch(config);
-      expect(platform.commitFiles).toHaveBeenCalledTimes(0);
+      expect(git.commitFiles).toHaveBeenCalledTimes(0);
     });
     it('commits files', async () => {
       config.updatedPackageFiles.push({
@@ -29,17 +33,17 @@ describe('workers/branch/automerge', () => {
         contents: 'some contents',
       });
       await commitFilesToBranch(config);
-      expect(platform.commitFiles).toHaveBeenCalledTimes(1);
-      expect(platform.commitFiles.mock.calls).toMatchSnapshot();
+      expect(git.commitFiles).toHaveBeenCalledTimes(1);
+      expect(git.commitFiles.mock.calls).toMatchSnapshot();
     });
     it('dry runs', async () => {
-      config.dryRun = true;
+      setAdminConfig({ dryRun: true });
       config.updatedPackageFiles.push({
         name: 'package.json',
         contents: 'some contents',
       });
       await commitFilesToBranch(config);
-      expect(platform.commitFiles).toHaveBeenCalledTimes(0);
+      expect(git.commitFiles).toHaveBeenCalledTimes(0);
     });
   });
 });

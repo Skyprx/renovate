@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs';
+import { getName } from '../../../test/util';
 import { extractPackageFile } from './extract';
 
 const helmDefaultChartInitValues = readFileSync(
@@ -11,7 +12,7 @@ const helmMultiAndNestedImageValues = readFileSync(
   'utf8'
 );
 
-describe('lib/manager/helm-values/extract', () => {
+describe(getName(__filename), () => {
   describe('extractPackageFile()', () => {
     beforeEach(() => {
       jest.resetAllMocks();
@@ -35,6 +36,7 @@ describe('lib/manager/helm-values/extract', () => {
     it('extracts from complex values file correctly"', () => {
       const result = extractPackageFile(helmMultiAndNestedImageValues);
       expect(result).toMatchSnapshot();
+      expect(result.deps).toHaveLength(4);
     });
   });
 });

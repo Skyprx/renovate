@@ -1,9 +1,10 @@
-import * as httpMock from '../../../test/httpMock';
-import { PR_STATE_CLOSED } from '../../constants/pull-requests';
+import * as httpMock from '../../../test/http-mock';
+import { getName } from '../../../test/util';
+import { PrState } from '../../types';
 import { setBaseUrl } from '../../util/http/gitea';
 import * as ght from './gitea-helper';
 
-describe('platform/gitea/gitea-helper', () => {
+describe(getName(__filename), () => {
   const baseUrl = 'https://gitea.renovatebot.com/api/v1';
 
   const mockCommitHash = '0d9c7726c3d628b7e28af234595cfd20febdbf8e';
@@ -63,7 +64,7 @@ describe('platform/gitea/gitea-helper', () => {
 
   const mockPR: ght.PR = {
     number: 13,
-    state: 'open',
+    state: PrState.Open,
     title: 'Some PR',
     body: 'Lorem ipsum dolor sit amet',
     mergeable: true,
@@ -143,6 +144,9 @@ describe('platform/gitea/gitea-helper', () => {
     httpMock.setup();
     setBaseUrl(baseUrl);
   });
+  afterEach(() => {
+    httpMock.reset();
+  });
 
   describe('getCurrentUser', () => {
     it('should call /api/v1/user endpoint', async () => {
@@ -151,6 +155,17 @@ describe('platform/gitea/gitea-helper', () => {
       const res = await ght.getCurrentUser();
       expect(res).toEqual(mockUser);
       expect(httpMock.getTrace()).toMatchSnapshot();
+    });
+  });
+
+  describe('getVersion', () => {
+    it('should call /api/v1/version endpoint', async () => {
+      const version = '1.13.01.14.0+dev-754-g5d2b7ba63';
+      httpMock.scope(baseUrl).get('/version').reply(200, { version });
+
+      const res = await ght.getVersion();
+      expect(httpMock.getTrace()).toMatchSnapshot();
+      expect(res).toEqual(version);
     });
   });
 
@@ -172,7 +187,7 @@ describe('platform/gitea/gitea-helper', () => {
     it('should construct proper query parameters', async () => {
       httpMock
         .scope(baseUrl)
-        .get('/repos/search?uid=13')
+        .get('/repos/search?uid=13&archived=false')
         .reply(200, {
           ok: true,
           data: [otherMockRepo],
@@ -180,6 +195,7 @@ describe('platform/gitea/gitea-helper', () => {
 
       const res = await ght.searchRepos({
         uid: 13,
+        archived: false,
       });
       expect(res).toEqual([otherMockRepo]);
       expect(httpMock.getTrace()).toMatchSnapshot();
@@ -306,7 +322,7 @@ describe('platform/gitea/gitea-helper', () => {
     it('should call /api/v1/repos/[repo]/pulls/[pull] endpoint', async () => {
       const updatedMockPR: ght.PR = {
         ...mockPR,
-        state: 'closed',
+        state: PrState.Closed,
         title: 'new-title',
         body: 'new-body',
       };
@@ -317,7 +333,7 @@ describe('platform/gitea/gitea-helper', () => {
         .reply(200, updatedMockPR);
 
       const res = await ght.updatePR(mockRepo.full_name, mockPR.number, {
-        state: PR_STATE_CLOSED,
+        state: PrState.Closed,
         title: 'new-title',
         body: 'new-body',
         assignees: [otherMockUser.username],
@@ -371,6 +387,20 @@ describe('platform/gitea/gitea-helper', () => {
     });
   });
 
+  describe('addReviewers', () => {
+    it('should call /api/v1/repos/[repo]/pulls/[pull]/requested_reviewers endpoint', async () => {
+      httpMock
+        .scope(baseUrl)
+        .post(
+          `/repos/${mockRepo.full_name}/pulls/${mockPR.number}/requested_reviewers`
+        )
+        .reply(200);
+
+      await ght.requestPrReviewers(mockRepo.full_name, mockPR.number, {});
+      expect(httpMock.getTrace()).toMatchSnapshot();
+    });
+  });
+
   describe('searchPRs', () => {
     it('should call /api/v1/repos/[repo]/pulls endpoint', async () => {
       httpMock
@@ -392,7 +422,7 @@ describe('platform/gitea/gitea-helper', () => {
         .reply(200, [mockPR]);
 
       const res = await ght.searchPRs(mockRepo.full_name, {
-        state: 'open',
+        state: PrState.Open,
         labels: [mockLabel.id, otherMockLabel.id],
       });
       expect(res).toEqual([mockPR]);
@@ -461,7 +491,7 @@ describe('platform/gitea/gitea-helper', () => {
     it('should call /api/v1/repos/[repo]/issues endpoint', async () => {
       httpMock
         .scope(baseUrl)
-        .get(`/repos/${mockRepo.full_name}/issues`)
+        .get(`/repos/${mockRepo.full_name}/issues?type=issues`)
         .reply(200, [mockIssue]);
 
       const res = await ght.searchIssues(mockRepo.full_name, {});
@@ -472,7 +502,7 @@ describe('platform/gitea/gitea-helper', () => {
     it('should construct proper query parameters', async () => {
       httpMock
         .scope(baseUrl)
-        .get(`/repos/${mockRepo.full_name}/issues?state=open`)
+        .get(`/repos/${mockRepo.full_name}/issues?state=open&type=issues`)
         .reply(200, [mockIssue]);
 
       const res = await ght.searchIssues(mockRepo.full_name, {
@@ -677,12 +707,13 @@ describe('platform/gitea/gitea-helper', () => {
         { ...mockCommitStatus, status: 'unknown' },
       ];
 
-      for (const { status, created_at, expected } of statuses) {
+      for (const statusElem of statuses) {
+        const { status, expected } = statusElem;
         // Add current status ot list of commit statuses, then mock the API to return the whole list
         commitStatuses.push({
           ...mockCommitStatus,
           status,
-          created_at,
+          created_at: statusElem.created_at,
         });
         httpMock
           .scope(baseUrl)

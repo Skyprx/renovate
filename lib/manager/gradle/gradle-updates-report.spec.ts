@@ -1,6 +1,6 @@
-import * as path from 'path';
 import * as fs from 'fs-extra';
 import tmp, { DirectoryResult } from 'tmp-promise';
+import * as upath from 'upath';
 import { getName } from '../../../test/util';
 import { exec } from '../../util/exec';
 import { ifSystemSupportsGradle } from './__testutil__/gradle';
@@ -8,7 +8,8 @@ import {
   GRADLE_DEPENDENCY_REPORT_FILENAME,
   createRenovateGradlePlugin,
 } from './gradle-updates-report';
-import { GRADLE_DEPENDENCY_REPORT_OPTIONS } from './index';
+import { extraEnv } from './utils';
+import { GRADLE_DEPENDENCY_REPORT_OPTIONS } from '.';
 
 const fixtures = 'lib/manager/gradle/__fixtures__';
 
@@ -31,9 +32,10 @@ describe(getName(__filename), () => {
           );
           await createRenovateGradlePlugin(workingDir.path);
 
-          const gradlew = path.join(workingDir.path, 'gradlew');
+          const gradlew = upath.join(workingDir.path, 'gradlew');
           await exec(`${gradlew} ${GRADLE_DEPENDENCY_REPORT_OPTIONS}`, {
             cwd: workingDir.path,
+            extraEnv,
           });
           expect(
             fs.readJSONSync(

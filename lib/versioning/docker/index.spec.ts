@@ -11,6 +11,24 @@ describe('docker.', () => {
       expect(docker.isValid('3')).toBe('3');
       expect(docker.isValid('foo')).toBeNull();
     });
+    it('should return null if the version string looks like a git commit hash', () => {
+      [
+        '0a1b2c3',
+        '0a1b2c3d',
+        '0a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d',
+      ].forEach((version) => {
+        expect(docker.isValid(version)).toBeNull();
+      });
+      [
+        '0a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0',
+        '0a1b2C3',
+        '0z1b2c3',
+        '0A1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d',
+        '123098140293',
+      ].forEach((version) => {
+        expect(docker.isValid(version)).toBe(version);
+      });
+    });
   });
   describe('getMajor(version)', () => {
     it('should support all versions length', () => {
@@ -67,9 +85,9 @@ describe('docker.', () => {
       expect(docker.equals('1.2', '1.2.3')).toBe(false);
     });
   });
-  describe('maxSatisfyingVersion(versions, range)', () => {
+  describe('getSatisfyingVersion(versions, range)', () => {
     it('should support all versions length', () => {
-      [docker.minSatisfyingVersion, docker.maxSatisfyingVersion].forEach(
+      [docker.minSatisfyingVersion, docker.getSatisfyingVersion].forEach(
         (max) => {
           const versions = [
             '0.9.8',
@@ -132,13 +150,13 @@ describe('docker.', () => {
     });
   });
   describe('getNewValue(', () => {
-    it('returns toVersion', () => {
+    it('returns newVersion', () => {
       expect(
         docker.getNewValue({
           currentValue: null,
           rangeStrategy: null,
-          fromVersion: null,
-          toVersion: '1.2.3',
+          currentVersion: null,
+          newVersion: '1.2.3',
         })
       ).toBe('1.2.3');
     });

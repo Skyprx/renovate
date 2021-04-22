@@ -1,6 +1,8 @@
 import { logger } from '../../logger';
+import { ExternalHostError } from '../../types/errors/external-host-error';
+import { getElapsedMinutes } from '../../util/date';
 import { Http } from '../../util/http';
-import { DatasourceError, ReleaseResult } from '../common';
+import type { ReleaseResult } from '../types';
 import { id } from './common';
 
 const http = new Http(id);
@@ -8,6 +10,13 @@ const http = new Http(id);
 let lastSync = new Date('2000-01-01');
 let packageReleases: Record<string, string[]> = Object.create(null); // Because we might need a "constructor" key
 let contentLength = 0;
+
+// Note: use only for tests
+export function resetCache(): void {
+  lastSync = new Date('2000-01-01');
+  packageReleases = Object.create(null);
+  contentLength = 0;
+}
 
 /* https://bugs.chromium.org/p/v8/issues/detail?id=2869 */
 const copystr = (x: string): string => (' ' + x).slice(1);
@@ -31,7 +40,7 @@ async function updateRubyGemsVersions(): Promise<void> {
     if (err.statusCode !== 416) {
       contentLength = 0;
       packageReleases = Object.create(null); // Because we might need a "constructor" key
-      throw new DatasourceError(
+      throw new ExternalHostError(
         new Error('Rubygems fetch error - need to reset cache')
       );
     }
@@ -80,21 +89,18 @@ async function updateRubyGemsVersions(): Promise<void> {
 }
 
 function isDataStale(): boolean {
-  const minutesElapsed = Math.floor(
-    (new Date().getTime() - lastSync.getTime()) / (60 * 1000)
-  );
-  return minutesElapsed >= 5;
+  return getElapsedMinutes(lastSync) >= 5;
 }
 
-let _updateRubyGemsVersions: Promise<void> | undefined;
+let updateRubyGemsVersionsPromise: Promise<void> | undefined;
 
 async function syncVersions(): Promise<void> {
   if (isDataStale()) {
-    _updateRubyGemsVersions =
+    updateRubyGemsVersionsPromise =
       // eslint-disable-next-line @typescript-eslint/no-misused-promises
-      _updateRubyGemsVersions || updateRubyGemsVersions();
-    await _updateRubyGemsVersions;
-    _updateRubyGemsVersions = null;
+      updateRubyGemsVersionsPromise || updateRubyGemsVersions();
+    await updateRubyGemsVersionsPromise;
+    updateRubyGemsVersionsPromise = null;
   }
 }
 
@@ -107,7 +113,6 @@ export async function getRubygemsOrgDependency(
     return null;
   }
   const dep: ReleaseResult = {
-    name: lookupName,
     releases: packageReleases[lookupName].map((version) => ({ version })),
   };
   return dep;

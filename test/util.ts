@@ -1,10 +1,12 @@
 import crypto from 'crypto';
-import { expect, jest } from '@jest/globals';
-import { RenovateConfig as _RenovateConfig } from '../lib/config';
+import { expect } from '@jest/globals';
 import { getConfig } from '../lib/config/defaults';
+import type { RenovateConfig as _RenovateConfig } from '../lib/config/types';
+import * as _logger from '../lib/logger';
 import { platform as _platform } from '../lib/platform';
 import * as _env from '../lib/util/exec/env';
 import * as _fs from '../lib/util/fs';
+import * as _git from '../lib/util/git';
 import * as _hostRules from '../lib/util/host-rules';
 
 /**
@@ -24,9 +26,11 @@ export function partial<T>(obj: Partial<T>): T {
 }
 
 export const fs = mocked(_fs);
+export const git = mocked(_git);
 export const platform = mocked(_platform);
 export const env = mocked(_env);
 export const hostRules = mocked(_hostRules);
+export const logger = mocked(_logger);
 
 // Required because of isolatedModules
 export type RenovateConfig = _RenovateConfig;

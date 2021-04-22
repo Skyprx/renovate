@@ -2,7 +2,8 @@ import * as datasourceGithubTags from '../../datasource/github-tags';
 import * as datasourcePod from '../../datasource/pod';
 import { logger } from '../../logger';
 import { SkipReason } from '../../types';
-import { PackageDependency, PackageFile } from '../common';
+import { getSiblingFileName, localPathExists } from '../../util/fs';
+import type { PackageDependency, PackageFile } from '../types';
 
 const regexMappings = [
   /^\s*pod\s+(['"])(?<spec>[^'"/]+)(\/(?<subspec>[^'"]+))?\1/,
@@ -26,14 +27,14 @@ export interface ParsedLine {
 }
 
 export function parseLine(line: string): ParsedLine {
-  const result: ParsedLine = {};
+  let result: ParsedLine = {};
   if (!line) {
     return result;
   }
   for (const regex of Object.values(regexMappings)) {
     const match = regex.exec(line.replace(/#.*$/, ''));
-    if (match && match.groups) {
-      Object.assign(result, match.groups);
+    if (match?.groups) {
+      result = { ...result, ...match.groups };
     }
   }
 
@@ -57,11 +58,11 @@ export function parseLine(line: string): ParsedLine {
 
 export function gitDep(parsedLine: ParsedLine): PackageDependency | null {
   const { depName, git, tag } = parsedLine;
-  if (git && git.startsWith('https://github.com/')) {
+  if (git?.startsWith('https://github.com/')) {
     const githubMatch = /https:\/\/github\.com\/(?<account>[^/]+)\/(?<repo>[^/]+)/.exec(
       git
     );
-    const { account, repo } = (githubMatch && githubMatch.groups) || {};
+    const { account, repo } = githubMatch?.groups || {};
     if (account && repo) {
       return {
         datasource: datasourceGithubTags.id,
@@ -72,10 +73,13 @@ export function gitDep(parsedLine: ParsedLine): PackageDependency | null {
     }
   }
 
-  return null; // TODO: gitlab or gitTags datasources?
+  return null;
 }
 
-export function extractPackageFile(content: string): PackageFile | null {
+export async function extractPackageFile(
+  content: string,
+  fileName: string
+): Promise<PackageFile | null> {
   logger.trace('cocoapods.extractPackageFile()');
   const deps: PackageDependency[] = [];
   const lines: string[] = content.split('\n');
@@ -137,6 +141,11 @@ export function extractPackageFile(content: string): PackageFile | null {
       deps.push(dep);
     }
   }
-
-  return deps.length ? { deps } : null;
+  const res: PackageFile = { deps };
+  const lockFile = getSiblingFileName(fileName, 'Podfile.lock');
+  // istanbul ignore if
+  if (await localPathExists(lockFile)) {
+    res.lockFiles = [lockFile];
+  }
+  return res;
 }

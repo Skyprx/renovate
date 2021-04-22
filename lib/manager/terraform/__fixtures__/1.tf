@@ -6,6 +6,10 @@ module "bar" {
   source = "github.com/hashicorp/example?ref=next"
 }
 
+module "repo-with-non-semver-ref" {
+  source = "github.com/githubuser/myrepo//terraform/modules/moduleone?ref=tfmodule_one-v0.0.9"
+}
+
 module "repo-with-dot" {
   source = "github.com/hashicorp/example.2.3?ref=v1.0.0"
 }
@@ -73,6 +77,31 @@ module "vote_service_sg" {
       cidr_blocks = "0.0.0.0/0"
     },
   ]
+}
+
+module "addons_aws" {
+
+  providers = {
+    helm       = helm.core
+    kubectl    = kubectl.core
+    kubernetes = kubernetes.core
+  }
+
+  cluster-name = data.aws_eks_cluster.core_cluster.id
+
+  aws-ebs-csi-driver = {
+    enabled          = true
+    is_default_class = true
+    version = "1.0.0"
+  }
+
+
+  source  = "particuleio/addons/kubernetes//modules/aws"
+  version = "1.28.3"
+
+  aws-load-balancer-controller = {
+    enabled = true
+  }
 }
 
 module "consul" {
@@ -158,4 +187,102 @@ module "gittags_http" {
 
 module "gittags_ssh" {
   source = "git::ssh://git@bitbucket.com/hashicorp/example?ref=v1.0.3"
+}
+
+terraform {
+  required_providers {
+    aws = ">= 2.7.0"
+  }
+}
+
+terraform {
+  required_providers {
+    azurerm = ">= 2.0.0"
+  }
+}
+
+terraform {
+  required_providers {
+    docker = {
+      source  = "terraform-providers/docker"
+      version = "2.7.2"
+    }
+    aws = {
+      source  = "aws"
+      version = "2.7.0"
+    }
+    // falls back block name for source
+    azurerm = {
+      version = "=2.27.0"
+    }
+    invalid = {
+      source  = "//hashicorp/helm"
+      version = "1.2.4"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "1.2.4"
+    }
+    kubernetes = {
+      source  = "terraform.example.com/hashicorp/kubernetes"
+      version = ">= 1.0"
+    }
+  }
+  required_version = ">= 0.13"
+}
+
+
+# docker_image resources
+# https://www.terraform.io/docs/providers/docker/r/image.html
+resource "docker_image" "nginx" {
+  name = "nginx:1.7.8"
+}
+
+resource "docker_image" "invalid" {
+}
+
+resource "docker_image" "ignore_variable" {
+  name          = "${data.docker_registry_image.ubuntu.name}"
+  pull_triggers = ["${data.docker_registry_image.ubuntu.sha256_digest}"]
+}
+
+
+# docker_container resources
+# https://www.terraform.io/docs/providers/docker/r/container.html
+resource "docker_container" "foo" {
+  name  = "foo"
+  image = "nginx:1.7.8"
+}
+
+resource "docker_container" "invalid" {
+  name = "foo"
+}
+
+
+# docker_service resources
+# https://www.terraform.io/docs/providers/docker/r/service.html
+resource "docker_service" "foo" {
+  name = "foo-service"
+
+  task_spec {
+    container_spec {
+      image = "repo.mycompany.com:8080/foo-service:v1"
+    }
+  }
+
+  endpoint_spec {
+    ports {
+      target_port = "8080"
+    }
+  }
+}
+
+resource "docker_service" "invalid" {
+}
+
+# unsupported resources
+resource "not_supported_resource" "foo" {
+  name  = "foo"
+  image = "nginx:1.7.8"
+  dummy = "true"
 }

@@ -1,26 +1,29 @@
+import { parse } from '@iarna/toml';
 import is from '@sindresorhus/is';
-import fs from 'fs-extra';
 import { quote } from 'shlex';
-import { parse } from 'toml';
+import { TEMPORARY_ERROR } from '../../constants/error-messages';
 import { logger } from '../../logger';
 import { ExecOptions, exec } from '../../util/exec';
 import {
+  deleteLocalFile,
   getSiblingFileName,
   readLocalFile,
   writeLocalFile,
 } from '../../util/fs';
-import {
+import { find } from '../../util/host-rules';
+import type {
   UpdateArtifact,
   UpdateArtifactsConfig,
   UpdateArtifactsResult,
-} from '../common';
+} from '../types';
+import type { PoetryFile, PoetrySource } from './types';
 
 function getPythonConstraint(
   existingLockFileContent: string,
   config: UpdateArtifactsConfig
 ): string | undefined | null {
-  const { compatibility = {} } = config;
-  const { python } = compatibility;
+  const { constraints = {} } = config;
+  const { python } = constraints;
 
   if (python) {
     logger.debug('Using python constraint from config');
@@ -37,6 +40,50 @@ function getPythonConstraint(
   return undefined;
 }
 
+function getPoetrySources(content: string, fileName: string): PoetrySource[] {
+  let pyprojectFile: PoetryFile;
+  try {
+    pyprojectFile = parse(content);
+  } catch (err) {
+    logger.debug({ err }, 'Error parsing pyproject.toml file');
+    return [];
+  }
+  if (!pyprojectFile.tool?.poetry) {
+    logger.debug(`{$fileName} contains no poetry section`);
+    return [];
+  }
+
+  const sources = pyprojectFile.tool?.poetry?.source || [];
+  const sourceArray: PoetrySource[] = [];
+  for (const source of sources) {
+    if (source.name && source.url) {
+      sourceArray.push({ name: source.name, url: source.url });
+    }
+  }
+  return sourceArray;
+}
+
+function getSourceCredentialVars(
+  pyprojectContent: string,
+  packageFileName: string
+): Record<string, string> {
+  const poetrySources = getPoetrySources(pyprojectContent, packageFileName);
+  const envVars: Record<string, string> = {};
+
+  for (const source of poetrySources) {
+    const matchingHostRule = find({ url: source.url });
+    const formattedSourceName = source.name.toUpperCase();
+    if (matchingHostRule.username) {
+      envVars[`POETRY_HTTP_BASIC_${formattedSourceName}_USERNAME`] =
+        matchingHostRule.username;
+    }
+    if (matchingHostRule.password) {
+      envVars[`POETRY_HTTP_BASIC_${formattedSourceName}_PASSWORD`] =
+        matchingHostRule.password;
+    }
+  }
+  return envVars;
+}
 export async function updateArtifacts({
   packageFileName,
   updatedDeps,
@@ -65,7 +112,7 @@ export async function updateArtifacts({
     await writeLocalFile(packageFileName, newPackageFileContent);
     const cmd: string[] = [];
     if (config.isLockFileMaintenance) {
-      await fs.remove(lockFileName);
+      await deleteLocalFile(lockFileName);
       cmd.push('poetry update --lock --no-interaction');
     } else {
       for (let i = 0; i < updatedDeps.length; i += 1) {
@@ -74,12 +121,19 @@ export async function updateArtifacts({
       }
     }
     const tagConstraint = getPythonConstraint(existingLockFileContent, config);
-    const poetryRequirement = config.compatibility?.poetry || 'poetry';
-    const poetryInstall = 'pip install ' + quote(poetryRequirement);
+    const poetryRequirement = config.constraints?.poetry || 'poetry';
+    const poetryInstall =
+      'pip install ' + poetryRequirement.split(' ').map(quote).join(' ');
+    const extraEnv = getSourceCredentialVars(
+      newPackageFileContent,
+      packageFileName
+    );
+
     const execOptions: ExecOptions = {
       cwdFile: packageFileName,
+      extraEnv,
       docker: {
-        image: 'renovate/python',
+        image: 'python',
         tagConstraint,
         tagScheme: 'poetry',
         preCommands: [poetryInstall],
@@ -101,12 +155,16 @@ export async function updateArtifacts({
       },
     ];
   } catch (err) {
+    // istanbul ignore if
+    if (err.message === TEMPORARY_ERROR) {
+      throw err;
+    }
     logger.debug({ err }, `Failed to update ${lockFileName} file`);
     return [
       {
         artifactError: {
           lockFile: lockFileName,
-          stderr: err.stdout + '\n' + err.stderr,
+          stderr: `${String(err.stdout)}\n${String(err.stderr)}`,
         },
       },
     ];

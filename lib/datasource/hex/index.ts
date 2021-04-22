@@ -1,8 +1,13 @@
 import { logger } from '../../logger';
+import { ExternalHostError } from '../../types/errors/external-host-error';
 import { Http } from '../../util/http';
-import { DatasourceError, GetReleasesConfig, ReleaseResult } from '../common';
+import * as hexVersioning from '../../versioning/hex';
+import type { GetReleasesConfig, ReleaseResult } from '../types';
 
 export const id = 'hex';
+export const defaultRegistryUrls = ['https://hex.pm/'];
+export const customRegistrySupport = false;
+export const defaultVersioning = hexVersioning.id;
 
 const http = new Http(id);
 
@@ -17,6 +22,7 @@ interface HexRelease {
 
 export async function getReleases({
   lookupName,
+  registryUrl,
 }: GetReleasesConfig): Promise<ReleaseResult | null> {
   // Get dependency name from lookupName.
   // If the dependency is private lookupName contains organization name as following:
@@ -24,7 +30,7 @@ export async function getReleases({
   // hexPackageName is used to pass it in hex dep url
   // organizationName is used for accessing to private deps
   const hexPackageName = lookupName.split(':')[0];
-  const hexUrl = `https://hex.pm/api/packages/${hexPackageName}`;
+  const hexUrl = `${registryUrl}api/packages/${hexPackageName}`;
   try {
     const response = await http.getJson<HexRelease>(hexUrl);
 
@@ -57,29 +63,18 @@ export async function getReleases({
       result.homepage = homepage;
     }
 
-    if (meta && meta.links && meta.links.Github) {
+    if (meta?.links?.Github) {
       result.sourceUrl = hexRelease.meta.links.Github;
     }
 
     return result;
   } catch (err) {
-    const errorData = { lookupName, err };
-
     if (
       err.statusCode === 429 ||
       (err.statusCode >= 500 && err.statusCode < 600)
     ) {
-      throw new DatasourceError(err);
+      throw new ExternalHostError(err);
     }
-
-    if (err.statusCode === 401) {
-      logger.debug(errorData, 'Authorization error');
-    } else if (err.statusCode === 404) {
-      logger.debug(errorData, 'Package lookup error');
-    } else {
-      logger.warn(errorData, 'hex lookup failure: Unknown error');
-    }
+    throw err;
   }
-
-  return null;
 }

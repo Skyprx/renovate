@@ -1,19 +1,19 @@
 import { platform } from '../../../platform';
 import { BranchStatus } from '../../../types';
 import { emojify } from '../../../util/emoji';
-import { BranchConfig } from '../../common';
+import type { BranchConfig } from '../../types';
 
 export async function getPrConfigDescription(
   config: BranchConfig
 ): Promise<string> {
-  let prBody = `\n\n---\n\n### Renovate configuration\n\n`;
+  let prBody = `\n\n---\n\n### Configuration\n\n`;
   prBody += emojify(`:date: **Schedule**: `);
   if (
     config.schedule &&
     (config.schedule as never) !== 'at any time' &&
     config.schedule[0] !== 'at any time'
   ) {
-    prBody += `"${config.schedule}"`;
+    prBody += `"${String(config.schedule)}"`;
     if (config.timezone) {
       prBody += ` in timezone ${config.timezone}.`;
     } else {

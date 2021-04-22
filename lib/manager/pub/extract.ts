@@ -1,8 +1,7 @@
 import { safeLoad } from 'js-yaml';
 import * as datasourceDart from '../../datasource/dart';
 import { logger } from '../../logger';
-import { SkipReason } from '../../types';
-import { PackageDependency, PackageFile } from '../common';
+import type { PackageDependency, PackageFile } from '../types';
 
 function getDeps(
   depsObj: { [x: string]: any },
@@ -19,7 +18,7 @@ function getDeps(
     const section = depsObj[depName];
 
     let currentValue: string | null = null;
-    if (section && section.version) {
+    if (section?.version) {
       currentValue = section.version.toString();
     } else if (section) {
       if (typeof section === 'string') {
@@ -31,9 +30,6 @@ function getDeps(
     }
 
     const dep: PackageDependency = { ...preset, depName, currentValue };
-    if (!currentValue) {
-      dep.skipReason = SkipReason.NotAVersion;
-    }
 
     return [...acc, dep];
   }, []);
@@ -44,7 +40,8 @@ export function extractPackageFile(
   packageFile: string
 ): PackageFile | null {
   try {
-    const doc = safeLoad(content);
+    // TODO: fix me
+    const doc = safeLoad(content, { json: true }) as any;
     const deps = [
       ...getDeps(doc.dependencies, {
         depType: 'dependencies',

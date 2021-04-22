@@ -1,34 +1,33 @@
 // SEE for the reference https://github.com/renovatebot/renovate/blob/c3e9e572b225085448d94aa121c7ec81c14d3955/lib/platform/bitbucket/utils.js
 import url from 'url';
-import {
-  PR_STATE_CLOSED,
-  PR_STATE_MERGED,
-  PR_STATE_OPEN,
-} from '../../constants/pull-requests';
-import { HttpResponse } from '../../util/http';
+import { HTTPError, Response } from 'got';
+import { PrState } from '../../types';
+import { HttpOptions, HttpPostOptions, HttpResponse } from '../../util/http';
 import { BitbucketServerHttp } from '../../util/http/bitbucket-server';
-import { BbbsRestPr, BbsPr } from './types';
+import type { BbsPr, BbsRestPr } from './types';
+
+const BITBUCKET_INVALID_REVIEWERS_EXCEPTION =
+  'com.atlassian.bitbucket.pull.InvalidPullRequestReviewersException';
 
 const bitbucketServerHttp = new BitbucketServerHttp();
 
 // https://docs.atlassian.com/bitbucket-server/rest/6.0.0/bitbucket-rest.html#idp250
 const prStateMapping: any = {
-  MERGED: PR_STATE_MERGED,
-  DECLINED: PR_STATE_CLOSED,
-  OPEN: PR_STATE_OPEN,
+  MERGED: PrState.Merged,
+  DECLINED: PrState.Closed,
+  OPEN: PrState.Open,
 };
 
-export function prInfo(pr: BbbsRestPr): BbsPr {
+export function prInfo(pr: BbsRestPr): BbsPr {
   return {
     version: pr.version,
     number: pr.id,
     body: pr.description,
-    branchName: pr.fromRef.displayId,
+    sourceBranch: pr.fromRef.displayId,
     targetBranch: pr.toRef.displayId,
     title: pr.title,
     state: prStateMapping[pr.state],
     createdAt: pr.createdDate,
-    isModified: true,
   };
 }
 
@@ -41,23 +40,32 @@ const addMaxLength = (inputUrl: string, limit = 100): string => {
   return maxedUrl;
 };
 
-async function callApi<T>(
+function callApi<T>(
   apiUrl: string,
   method: string,
-  options?: any
+  options?: HttpOptions | HttpPostOptions
 ): Promise<HttpResponse<T>> {
   /* istanbul ignore next */
   switch (method.toLowerCase()) {
     case 'post':
-      return bitbucketServerHttp.postJson<T>(apiUrl, options);
+      return bitbucketServerHttp.postJson<T>(
+        apiUrl,
+        options as HttpPostOptions
+      );
     case 'put':
-      return bitbucketServerHttp.putJson<T>(apiUrl, options);
+      return bitbucketServerHttp.putJson<T>(apiUrl, options as HttpPostOptions);
     case 'patch':
-      return bitbucketServerHttp.patchJson<T>(apiUrl, options);
+      return bitbucketServerHttp.patchJson<T>(
+        apiUrl,
+        options as HttpPostOptions
+      );
     case 'head':
       return bitbucketServerHttp.headJson<T>(apiUrl, options);
     case 'delete':
-      return bitbucketServerHttp.deleteJson<T>(apiUrl, options);
+      return bitbucketServerHttp.deleteJson<T>(
+        apiUrl,
+        options as HttpPostOptions
+      );
     case 'get':
     default:
       return bitbucketServerHttp.getJson<T>(apiUrl, options);
@@ -67,7 +75,7 @@ async function callApi<T>(
 export async function accumulateValues<T = any>(
   reqUrl: string,
   method = 'get',
-  options?: any,
+  options?: HttpOptions | HttpPostOptions,
   limit?: number
 ): Promise<T[]> {
   let accumulator: T[] = [];
@@ -113,4 +121,39 @@ export type BitbucketBranchState =
 export interface BitbucketStatus {
   key: string;
   state: BitbucketBranchState;
+}
+
+interface BitbucketErrorResponse {
+  errors?: {
+    exceptionName?: string;
+    reviewerErrors?: { context?: string }[];
+  }[];
+}
+
+interface BitbucketError extends HTTPError {
+  readonly response: Response<BitbucketErrorResponse>;
+}
+
+export function isInvalidReviewersResponse(err: BitbucketError): boolean {
+  const errors = err?.response?.body?.errors || [];
+  return (
+    errors.length > 0 &&
+    errors.every(
+      (error) => error.exceptionName === BITBUCKET_INVALID_REVIEWERS_EXCEPTION
+    )
+  );
+}
+
+export function getInvalidReviewers(err: BitbucketError): string[] {
+  const errors = err?.response?.body?.errors || [];
+  let invalidReviewers = [];
+  for (const error of errors) {
+    if (error.exceptionName === BITBUCKET_INVALID_REVIEWERS_EXCEPTION) {
+      invalidReviewers = invalidReviewers.concat(
+        error.reviewerErrors?.map(({ context }) => context) || []
+      );
+    }
+  }
+
+  return invalidReviewers;
 }

@@ -1,10 +1,15 @@
-import is from '@sindresorhus/is';
 import { logger } from '../../logger';
-import * as globalCache from '../../util/cache/global';
+import { ExternalHostError } from '../../types/errors/external-host-error';
+import * as packageCache from '../../util/cache/package';
 import { Http } from '../../util/http';
-import { DatasourceError, GetReleasesConfig, ReleaseResult } from '../common';
+import * as hashicorpVersioning from '../../versioning/hashicorp';
+import type { GetReleasesConfig, ReleaseResult } from '../types';
 
 export const id = 'terraform-module';
+export const customRegistrySupport = true;
+export const defaultRegistryUrls = ['https://registry.terraform.io'];
+export const defaultVersioning = hashicorpVersioning.id;
+export const registryStrategy = 'first';
 
 const http = new Http(id);
 
@@ -15,17 +20,15 @@ interface RegistryRepository {
 
 function getRegistryRepository(
   lookupName: string,
-  registryUrls: string[]
+  registryUrl: string
 ): RegistryRepository {
   let registry: string;
   const split = lookupName.split('/');
   if (split.length > 3 && split[0].includes('.')) {
     [registry] = split;
     split.shift();
-  } else if (is.nonEmptyArray(registryUrls)) {
-    [registry] = registryUrls;
   } else {
-    registry = 'registry.terraform.io';
+    registry = registryUrl;
   }
   if (!/^https?:\/\//.test(registry)) {
     registry = `https://${registry}`;
@@ -43,8 +46,42 @@ interface TerraformRelease {
   provider: string;
   source?: string;
   versions: string[];
+  version: string;
+  published_at: string;
 }
 
+export interface ServiceDiscoveryResult {
+  'modules.v1'?: string;
+  'providers.v1'?: string;
+}
+
+export async function getTerraformServiceDiscoveryResult(
+  registryUrl: string
+): Promise<ServiceDiscoveryResult> {
+  const discoveryURL = `${registryUrl}/.well-known/terraform.json`;
+  const cacheNamespace = 'terraform-service-discovery';
+  const cachedResult = await packageCache.get<ServiceDiscoveryResult>(
+    cacheNamespace,
+    registryUrl
+  );
+  // istanbul ignore if
+  if (cachedResult) {
+    return cachedResult;
+  }
+  const serviceDiscovery = (
+    await http.getJson<ServiceDiscoveryResult>(discoveryURL)
+  ).body;
+
+  const cacheMinutes = 1440; // 24h
+  await packageCache.set(
+    cacheNamespace,
+    registryUrl,
+    serviceDiscovery,
+    cacheMinutes
+  );
+
+  return serviceDiscovery;
+}
 /**
  * terraform.getReleases
  *
@@ -54,27 +91,31 @@ interface TerraformRelease {
  */
 export async function getReleases({
   lookupName,
-  registryUrls,
+  registryUrl,
 }: GetReleasesConfig): Promise<ReleaseResult | null> {
   const { registry, repository } = getRegistryRepository(
     lookupName,
-    registryUrls
+    registryUrl
   );
   logger.debug(
     { registry, terraformRepository: repository },
     'terraform.getDependencies()'
   );
   const cacheNamespace = 'terraform-module';
-  const pkgUrl = `${registry}/v1/modules/${repository}`;
-  const cachedResult = await globalCache.get<ReleaseResult>(
+  const cacheURL = `${registry}/${repository}`;
+  const cachedResult = await packageCache.get<ReleaseResult>(
     cacheNamespace,
-    pkgUrl
+    cacheURL
   );
   // istanbul ignore if
   if (cachedResult) {
     return cachedResult;
   }
   try {
+    const serviceDiscovery = await getTerraformServiceDiscoveryResult(
+      registryUrl
+    );
+    const pkgUrl = `${registry}${serviceDiscovery['modules.v1']}${repository}`;
     const res = (await http.getJson<TerraformRelease>(pkgUrl)).body;
     const returnedName = res.namespace + '/' + res.name + '/' + res.provider;
     if (returnedName !== repository) {
@@ -83,8 +124,6 @@ export async function getReleases({
     }
     // Simplify response before caching and returning
     const dep: ReleaseResult = {
-      name: repository,
-      versions: {},
       releases: null,
     };
     if (res.source) {
@@ -96,30 +135,23 @@ export async function getReleases({
     if (pkgUrl.startsWith('https://registry.terraform.io/')) {
       dep.homepage = `https://registry.terraform.io/modules/${repository}`;
     }
+    // set published date for latest release
+    const latestVersion = dep.releases.find(
+      (release) => res.version === release.version
+    );
+    if (latestVersion) {
+      latestVersion.releaseTimestamp = res.published_at;
+    }
     logger.trace({ dep }, 'dep');
     const cacheMinutes = 30;
-    await globalCache.set(cacheNamespace, pkgUrl, dep, cacheMinutes);
+    await packageCache.set(cacheNamespace, pkgUrl, dep, cacheMinutes);
     return dep;
   } catch (err) {
-    if (err.statusCode === 404 || err.code === 'ENOTFOUND') {
-      logger.debug(
-        { lookupName },
-        `Terraform registry lookup failure: not found`
-      );
-      logger.debug({
-        err,
-      });
-      return null;
-    }
     const failureCodes = ['EAI_AGAIN'];
     // istanbul ignore if
     if (failureCodes.includes(err.code)) {
-      throw new DatasourceError(err);
+      throw new ExternalHostError(err);
     }
-    logger.warn(
-      { err, lookupName },
-      'Terraform registry failure: Unknown error'
-    );
-    return null;
+    throw err;
   }
 }

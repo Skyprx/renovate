@@ -30,12 +30,11 @@ Object {
           ],
         },
         Object {
+          "0": "a",
+          "1": "b",
           "depName": "bbb",
           "depType": "dependencies",
-          "updates": Array [
-            "a",
-            "b",
-          ],
+          "updates": Array [],
         },
       ],
       "packageFile": "package.json",
@@ -67,11 +66,6 @@ Object {
           "updates": Array [],
         },
         Object {
-          "depName": "zzzz",
-          "skipReason": "internal-package",
-          "updates": Array [],
-        },
-        Object {
           "depName": "foo",
           "skipReason": "disabled",
           "updates": Array [],
@@ -81,9 +75,6 @@ Object {
           "skipReason": "some-reason",
           "updates": Array [],
         },
-      ],
-      "internalPackages": Array [
-        "zzzz",
       ],
       "packageFile": "package.json",
     },

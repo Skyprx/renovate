@@ -1,7 +1,9 @@
-import { RenovateConfig, platform } from '../../../../test/util';
+import { RenovateConfig, getName } from '../../../../test/util';
 import * as fileMatch from './file-match';
 
-describe('workers/repository/extract/file-match', () => {
+jest.mock('../../../util/git');
+
+describe(getName(__filename), () => {
   const fileList = ['package.json', 'frontend/package.json'];
   describe('getIncludedFiles()', () => {
     it('returns fileList if no includePaths', () => {
@@ -46,17 +48,15 @@ describe('workers/repository/extract/file-match', () => {
       manager: 'npm',
       fileMatch: ['(^|/)package.json$'],
     };
-    it('returns npm files', async () => {
-      platform.getFileList.mockResolvedValue(fileList);
+    it('returns npm files', () => {
       fileList.push('Dockerfile');
-      const res = await fileMatch.getMatchingFiles(config);
+      const res = fileMatch.getMatchingFiles(config, fileList);
       expect(res).toMatchSnapshot();
       expect(res).toHaveLength(2);
     });
-    it('deduplicates', async () => {
-      platform.getFileList.mockResolvedValue(fileList);
+    it('deduplicates', () => {
       config.fileMatch.push('package.json');
-      const res = await fileMatch.getMatchingFiles(config);
+      const res = fileMatch.getMatchingFiles(config, fileList);
       expect(res).toMatchSnapshot();
       expect(res).toHaveLength(2);
     });

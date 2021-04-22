@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`workers/pr/changelog getChangeLogJSON filters unnecessary warns 1`] = `
+exports[`workers/pr/changelog/index getChangeLogJSON filters unnecessary warns 1`] = `
 Object {
   "hasReleaseNotes": true,
   "project": Object {
@@ -51,12 +51,12 @@ Object {
 }
 `;
 
-exports[`workers/pr/changelog getChangeLogJSON filters unnecessary warns 2`] = `
+exports[`workers/pr/changelog/index getChangeLogJSON filters unnecessary warns 2`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -67,40 +67,18 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/contents/",
+    "url": "https://api.github.com/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
-      "authorization": "token abc",
-      "host": "api.github.com",
-      "user-agent": "https://github.com/renovatebot/renovate",
-    },
-    "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/releases?per_page=100",
-  },
-  Object {
-    "headers": Object {
-      "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
-      "authorization": "token abc",
-      "host": "api.github.com",
-      "user-agent": "https://github.com/renovatebot/renovate",
-    },
-    "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/contents/",
-  },
-  Object {
-    "headers": Object {
-      "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -111,18 +89,18 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/contents/",
+    "url": "https://api.github.com/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -133,18 +111,40 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/contents/",
+    "url": "https://api.github.com/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "api.github.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://api.github.com/repos/chalk/chalk/releases?per_page=100",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "api.github.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://api.github.com/repos/chalk/chalk",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -155,7 +155,7 @@ Array [
 ]
 `;
 
-exports[`workers/pr/changelog getChangeLogJSON supports github enterprise and github enterprise changelog 1`] = `
+exports[`workers/pr/changelog/index getChangeLogJSON supports github enterprise and github enterprise changelog 1`] = `
 Object {
   "hasReleaseNotes": true,
   "project": Object {
@@ -206,12 +206,12 @@ Object {
 }
 `;
 
-exports[`workers/pr/changelog getChangeLogJSON supports github enterprise and github enterprise changelog 2`] = `
+exports[`workers/pr/changelog/index getChangeLogJSON supports github enterprise and github enterprise changelog 2`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -222,40 +222,29 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/contents/",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/releases?per_page=100",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/git/trees/master",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
-      "authorization": "token abc",
-      "host": "github-enterprise.example.com",
-      "user-agent": "https://github.com/renovatebot/renovate",
-    },
-    "method": "GET",
-    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/contents/",
-  },
-  Object {
-    "headers": Object {
-      "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -266,18 +255,29 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/contents/",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "github-enterprise.example.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/git/trees/master",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -288,18 +288,62 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/contents/",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "github-enterprise.example.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/git/trees/master",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "github-enterprise.example.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/releases?per_page=100",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "github-enterprise.example.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "github-enterprise.example.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/git/trees/master",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -310,7 +354,7 @@ Array [
 ]
 `;
 
-exports[`workers/pr/changelog getChangeLogJSON supports github enterprise and github.com changelog 1`] = `
+exports[`workers/pr/changelog/index getChangeLogJSON supports github enterprise and github.com changelog 1`] = `
 Object {
   "hasReleaseNotes": true,
   "project": Object {
@@ -361,12 +405,12 @@ Object {
 }
 `;
 
-exports[`workers/pr/changelog getChangeLogJSON supports github enterprise and github.com changelog 2`] = `
+exports[`workers/pr/changelog/index getChangeLogJSON supports github enterprise and github.com changelog 2`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -377,40 +421,29 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/contents/",
+    "url": "https://api.github.com/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/releases?per_page=100",
+    "url": "https://api.github.com/repos/chalk/chalk/git/trees/master",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
-      "authorization": "token abc",
-      "host": "api.github.com",
-      "user-agent": "https://github.com/renovatebot/renovate",
-    },
-    "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/contents/",
-  },
-  Object {
-    "headers": Object {
-      "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -421,18 +454,29 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/contents/",
+    "url": "https://api.github.com/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "api.github.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://api.github.com/repos/chalk/chalk/git/trees/master",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -443,18 +487,62 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/contents/",
+    "url": "https://api.github.com/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "api.github.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://api.github.com/repos/chalk/chalk/git/trees/master",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "api.github.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://api.github.com/repos/chalk/chalk/releases?per_page=100",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "api.github.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://api.github.com/repos/chalk/chalk",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "api.github.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://api.github.com/repos/chalk/chalk/git/trees/master",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -465,7 +553,7 @@ Array [
 ]
 `;
 
-exports[`workers/pr/changelog getChangeLogJSON supports github.com and github enterprise changelog 1`] = `
+exports[`workers/pr/changelog/index getChangeLogJSON supports github.com and github enterprise changelog 1`] = `
 Object {
   "hasReleaseNotes": true,
   "project": Object {
@@ -516,12 +604,12 @@ Object {
 }
 `;
 
-exports[`workers/pr/changelog getChangeLogJSON supports github.com and github enterprise changelog 2`] = `
+exports[`workers/pr/changelog/index getChangeLogJSON supports github.com and github enterprise changelog 2`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -532,40 +620,29 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/contents/",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/releases?per_page=100",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/git/trees/master",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
-      "authorization": "token abc",
-      "host": "github-enterprise.example.com",
-      "user-agent": "https://github.com/renovatebot/renovate",
-    },
-    "method": "GET",
-    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/contents/",
-  },
-  Object {
-    "headers": Object {
-      "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -576,18 +653,29 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/contents/",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "github-enterprise.example.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/git/trees/master",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -598,18 +686,62 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/contents/",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "github-enterprise.example.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/git/trees/master",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "github-enterprise.example.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/releases?per_page=100",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "github-enterprise.example.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "github-enterprise.example.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://github-enterprise.example.com/api/v3/repos/chalk/chalk/git/trees/master",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "github-enterprise.example.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -620,7 +752,7 @@ Array [
 ]
 `;
 
-exports[`workers/pr/changelog getChangeLogJSON supports node engines 1`] = `
+exports[`workers/pr/changelog/index getChangeLogJSON supports node engines 1`] = `
 Object {
   "hasReleaseNotes": true,
   "project": Object {
@@ -671,7 +803,7 @@ Object {
 }
 `;
 
-exports[`workers/pr/changelog getChangeLogJSON uses GitHub tags 1`] = `
+exports[`workers/pr/changelog/index getChangeLogJSON uses GitHub tags 1`] = `
 Object {
   "hasReleaseNotes": true,
   "project": Object {
@@ -726,12 +858,12 @@ Object {
 }
 `;
 
-exports[`workers/pr/changelog getChangeLogJSON uses GitHub tags 2`] = `
+exports[`workers/pr/changelog/index getChangeLogJSON uses GitHub tags 2`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -742,40 +874,29 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/contents/",
+    "url": "https://api.github.com/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/releases?per_page=100",
+    "url": "https://api.github.com/repos/chalk/chalk/git/trees/master",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
-      "authorization": "token abc",
-      "host": "api.github.com",
-      "user-agent": "https://github.com/renovatebot/renovate",
-    },
-    "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/contents/",
-  },
-  Object {
-    "headers": Object {
-      "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -786,18 +907,29 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/contents/",
+    "url": "https://api.github.com/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "api.github.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://api.github.com/repos/chalk/chalk/git/trees/master",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -808,18 +940,62 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
     "method": "GET",
-    "url": "https://api.github.com/repos/chalk/chalk/contents/",
+    "url": "https://api.github.com/repos/chalk/chalk",
   },
   Object {
     "headers": Object {
       "accept": "application/vnd.github.v3+json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "api.github.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://api.github.com/repos/chalk/chalk/git/trees/master",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "api.github.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://api.github.com/repos/chalk/chalk/releases?per_page=100",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "api.github.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://api.github.com/repos/chalk/chalk",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
+      "authorization": "token abc",
+      "host": "api.github.com",
+      "user-agent": "https://github.com/renovatebot/renovate",
+    },
+    "method": "GET",
+    "url": "https://api.github.com/repos/chalk/chalk/git/trees/master",
+  },
+  Object {
+    "headers": Object {
+      "accept": "application/vnd.github.v3+json",
+      "accept-encoding": "gzip, deflate, br",
       "authorization": "token abc",
       "host": "api.github.com",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -830,7 +1006,7 @@ Array [
 ]
 `;
 
-exports[`workers/pr/changelog getChangeLogJSON works without Github 1`] = `
+exports[`workers/pr/changelog/index getChangeLogJSON works without Github 1`] = `
 Object {
   "hasReleaseNotes": true,
   "project": Object {

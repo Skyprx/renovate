@@ -1,11 +1,12 @@
-import is from '@sindresorhus/is';
-import { RenovateConfig } from '../../../../config';
+import { getAdminConfig } from '../../../../config/admin';
+import type { RenovateConfig } from '../../../../config/types';
 import { logger } from '../../../../logger';
-import { PackageFile } from '../../../../manager/common';
+import type { PackageFile } from '../../../../manager/types';
 import { platform } from '../../../../platform';
 import { emojify } from '../../../../util/emoji';
-import { BranchConfig } from '../../../common';
-import { addAssigneesReviewers } from '../../../pr';
+import { deleteBranch, isBranchModified } from '../../../../util/git';
+import { addAssigneesReviewers, getPlatformPrOptions } from '../../../pr';
+import type { BranchConfig } from '../../../types';
 import { getBaseBranchDesc } from './base-branch';
 import { getConfigDesc } from './config-description';
 import { getDepWarnings, getErrors, getWarnings } from './errors-warnings';
@@ -65,9 +66,9 @@ If you need any further assistance then you can also [request help here](${confi
     prBody = prBody.replace('{{PACKAGE FILES}}\n', '');
   }
   let configDesc = '';
-  if (!(existingPr && existingPr.isModified)) {
-    configDesc = getConfigDesc(config, packageFiles);
-  } else {
+  if (getAdminConfig().dryRun) {
+    logger.info(`DRY-RUN: Would check branch ${config.onboardingBranch}`);
+  } else if (await isBranchModified(config.onboardingBranch)) {
     configDesc = emojify(
       `### Configuration\n\n:abcd: Renovate has detected a custom config for this PR. Feel free to ask for [help](${config.productLinks.help}) if you have any doubts and would like it reviewed.\n\n`
     );
@@ -78,6 +79,8 @@ If you need any further assistance then you can also [request help here](${confi
     } else {
       configDesc += `Important: Now that this branch is edited, Renovate can't rebase it from the base branch any more. If you make changes to the base branch that could impact this onboarding PR, please merge them manually.\n\n`;
     }
+  } else {
+    configDesc = getConfigDesc(config, packageFiles);
   }
   prBody = prBody.replace('{{CONFIG}}\n', configDesc);
   prBody = prBody.replace(
@@ -88,17 +91,18 @@ If you need any further assistance then you can also [request help here](${confi
   prBody = prBody.replace('{{BASEBRANCH}}\n', getBaseBranchDesc(config));
   prBody = prBody.replace('{{PRLIST}}\n', getPrList(config, branches));
   // istanbul ignore if
-  if (config.global) {
-    if (config.global.prBanner) {
-      prBody = config.global.prBanner + '\n\n' + prBody;
-    }
-    if (config.global.prFooter) {
-      prBody = prBody + '\n---\n\n' + config.global.prFooter + '\n';
-    }
+  if (config.prHeader) {
+    const prHeader = String(config.prHeader || '');
+    prBody = `${prHeader}\n\n${prBody}`;
+  }
+  // istanbul ignore if
+  if (config.prFooter) {
+    const prFooter = String(config.prFooter);
+    prBody = `${prBody}\n---\n\n${prFooter}\n`;
   }
   logger.trace('prBody:\n' + prBody);
 
-  prBody = platform.getPrBody(prBody);
+  prBody = platform.massageMarkdown(prBody);
 
   if (existingPr) {
     logger.debug('Found open onboarding PR');
@@ -110,24 +114,31 @@ If you need any further assistance then you can also [request help here](${confi
       return;
     }
     // PR must need updating
-    await platform.updatePr(existingPr.number, existingPr.title, prBody);
-    logger.info({ pr: existingPr.number }, 'Onboarding PR updated');
+    if (getAdminConfig().dryRun) {
+      logger.info('DRY-RUN: Would update onboarding PR');
+    } else {
+      await platform.updatePr({
+        number: existingPr.number,
+        prTitle: existingPr.title,
+        prBody,
+      });
+      logger.info({ pr: existingPr.number }, 'Onboarding PR updated');
+    }
     return;
   }
   logger.debug('Creating onboarding PR');
   const labels: string[] = [];
-  const useDefaultBranch = true;
   try {
-    // istanbul ignore if
-    if (config.dryRun) {
+    if (getAdminConfig().dryRun) {
       logger.info('DRY-RUN: Would create onboarding PR');
     } else {
       const pr = await platform.createPr({
-        branchName: config.onboardingBranch,
+        sourceBranch: config.onboardingBranch,
+        targetBranch: config.defaultBranch,
         prTitle: config.onboardingPrTitle,
         prBody,
         labels,
-        useDefaultBranch,
+        platformOptions: getPlatformPrOptions({ ...config, automerge: false }),
       });
       logger.info({ pr: pr.displayNumber }, 'Onboarding PR created');
       await addAssigneesReviewers(config, pr);
@@ -135,16 +146,12 @@ If you need any further assistance then you can also [request help here](${confi
   } catch (err) /* istanbul ignore next */ {
     if (
       err.statusCode === 422 &&
-      err.response &&
-      err.response.body &&
-      is.nonEmptyArray(err.response.body.errors) &&
-      err.response.body.errors[0].message &&
-      err.response.body.errors[0].message.startsWith(
+      err.response?.body?.errors?.[0]?.message?.startsWith(
         'A pull request already exists'
       )
     ) {
       logger.debug('Onboarding PR already exists but cannot find it');
-      await platform.deleteBranch(config.onboardingBranch);
+      await deleteBranch(config.onboardingBranch);
       return;
     }
     throw err;

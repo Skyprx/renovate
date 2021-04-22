@@ -1,8 +1,9 @@
-import * as httpMock from '../../../../test/httpMock';
+import * as httpMock from '../../../../test/http-mock';
+import { getName } from '../../../../test/util';
 import { PLATFORM_TYPE_GITLAB } from '../../../constants/platforms';
 import * as hostRules from '../../../util/host-rules';
 import * as semverVersioning from '../../../versioning/semver';
-import { BranchUpgradeConfig } from '../../common';
+import type { BranchUpgradeConfig } from '../../types';
 import { getChangeLogJSON } from '.';
 
 jest.mock('../../../../lib/datasource/npm');
@@ -12,8 +13,8 @@ const upgrade: BranchUpgradeConfig = {
   endpoint: 'https://gitlab.com/api/v4/ ',
   depName: 'renovate',
   versioning: semverVersioning.id,
-  fromVersion: '5.2.0',
-  toVersion: '5.7.0',
+  currentVersion: '5.2.0',
+  newVersion: '5.7.0',
   sourceUrl: 'https://gitlab.com/meno/dropzone/',
   releases: [
     // TODO: test gitRef
@@ -30,7 +31,7 @@ const upgrade: BranchUpgradeConfig = {
 
 const baseUrl = 'https://gitlab.com/';
 
-describe('workers/pr/changelog', () => {
+describe(getName(__filename), () => {
   describe('getChangeLogJSON', () => {
     beforeEach(() => {
       httpMock.setup();
@@ -49,18 +50,18 @@ describe('workers/pr/changelog', () => {
       expect(
         await getChangeLogJSON({
           ...upgrade,
-          fromVersion: null,
+          currentVersion: null,
         })
       ).toBeNull();
       expect(httpMock.getTrace()).toBeEmpty();
     });
-    it('returns null if fromVersion equals toVersion', async () => {
+    it('returns null if currentVersion equals newVersion', async () => {
       httpMock.scope(baseUrl);
       expect(
         await getChangeLogJSON({
           ...upgrade,
-          fromVersion: '1.0.0',
-          toVersion: '1.0.0',
+          currentVersion: '1.0.0',
+          newVersion: '1.0.0',
         })
       ).toBeNull();
       expect(httpMock.getTrace()).toBeEmpty();
@@ -83,7 +84,7 @@ describe('workers/pr/changelog', () => {
     it('uses GitLab tags', async () => {
       httpMock
         .scope(baseUrl)
-        .get('/api/v4/projects/meno%2Fdropzone/repository/tags')
+        .get('/api/v4/projects/meno%2fdropzone/repository/tags?per_page=100')
         .reply(200, [
           { name: 'v5.2.0' },
           { name: 'v5.4.0' },
@@ -93,7 +94,7 @@ describe('workers/pr/changelog', () => {
           { name: 'v5.7.0' },
         ])
         .persist()
-        .get('/api/v4/projects/meno/dropzone/repository/tree/')
+        .get('/api/v4/projects/meno%2fdropzone/repository/tree?per_page=100')
         .reply(200, [])
         .persist()
         .get('/api/v4/projects/meno%2fdropzone/releases?per_page=100')
@@ -108,10 +109,10 @@ describe('workers/pr/changelog', () => {
     it('handles empty GitLab tags response', async () => {
       httpMock
         .scope(baseUrl)
-        .get('/api/v4/projects/meno%2Fdropzone/repository/tags')
+        .get('/api/v4/projects/meno%2fdropzone/repository/tags?per_page=100')
         .reply(200, [])
         .persist()
-        .get('/api/v4/projects/meno/dropzone/repository/tree/')
+        .get('/api/v4/projects/meno%2fdropzone/repository/tree?per_page=100')
         .reply(200, [])
         .persist()
         .get('/api/v4/projects/meno%2fdropzone/releases?per_page=100')
@@ -126,10 +127,10 @@ describe('workers/pr/changelog', () => {
     it('uses GitLab tags with error', async () => {
       httpMock
         .scope(baseUrl)
-        .get('/api/v4/projects/meno%2Fdropzone/repository/tags')
+        .get('/api/v4/projects/meno%2fdropzone/repository/tags?per_page=100')
         .replyWithError('Unknown GitLab Repo')
         .persist()
-        .get('/api/v4/projects/meno/dropzone/repository/tree/')
+        .get('/api/v4/projects/meno%2fdropzone/repository/tree?per_page=100')
         .reply(200, [])
         .persist()
         .get('/api/v4/projects/meno%2fdropzone/releases?per_page=100')
@@ -185,6 +186,23 @@ describe('workers/pr/changelog', () => {
           ...upgrade,
           sourceUrl: 'https://gitlab-enterprise.example.com/meno/dropzone/',
           endpoint: 'https://gitlab-enterprise.example.com/',
+        })
+      ).toMatchSnapshot();
+    });
+    it('supports self-hosted gitlab changelog', async () => {
+      httpMock.scope('https://git.test.com').persist().get(/.*/).reply(200, []);
+      hostRules.add({
+        hostType: PLATFORM_TYPE_GITLAB,
+        baseUrl: 'https://git.test.com/',
+        token: 'abc',
+      });
+      process.env.GITHUB_ENDPOINT = '';
+      expect(
+        await getChangeLogJSON({
+          ...upgrade,
+          platform: PLATFORM_TYPE_GITLAB,
+          sourceUrl: 'https://git.test.com/meno/dropzone/',
+          endpoint: 'https://git.test.com/api/v4/',
         })
       ).toMatchSnapshot();
     });

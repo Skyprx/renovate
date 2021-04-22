@@ -1,6 +1,6 @@
 import { logger } from '../../../logger';
 import * as template from '../../../util/template';
-import { BranchConfig } from '../../common';
+import type { BranchConfig } from '../../types';
 
 type TableDefinition = {
   header: string;
@@ -8,7 +8,7 @@ type TableDefinition = {
 };
 
 function getTableDefinition(config: BranchConfig): TableDefinition[] {
-  const res = [];
+  const res: TableDefinition[] = [];
   for (const header of config.prBodyColumns) {
     const value = config.prBodyDefinitions[header];
     res.push({ header, value });
@@ -24,7 +24,7 @@ function getNonEmptyColumns(
   for (const column of definitions) {
     const { header } = column;
     for (const row of rows) {
-      if (row[header] && row[header].length) {
+      if (row[header]?.length) {
         if (!res.includes(header)) {
           res.push(header);
         }
@@ -61,7 +61,10 @@ export function getPrUpdatesTable(config: BranchConfig): string {
   for (const row of tableValues) {
     let val = '|';
     for (const column of tableColumns) {
-      val += ` ${row[column].replace(/^@/, '@&#8203;')} |`;
+      const content = row[column]
+        ? row[column].replace(/^@/, '@&#8203;').replace(/\|/g, '\\|')
+        : '';
+      val += ` ${content} |`;
     }
     val += '\n';
     rows.push(val);

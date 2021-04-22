@@ -1,15 +1,21 @@
 import {
   RenovateConfig,
   defaultConfig,
+  getName,
+  git,
   partial,
   platform,
 } from '../../../../../test/util';
-import { PackageFile } from '../../../../manager/common';
+import { setAdminConfig } from '../../../../config/admin';
+import { logger } from '../../../../logger';
+import type { PackageFile } from '../../../../manager/types';
 import { Pr } from '../../../../platform';
-import { BranchConfig } from '../../../common';
+import type { BranchConfig } from '../../../types';
 import { ensureOnboardingPr } from '.';
 
-describe('workers/repository/onboarding/pr', () => {
+jest.mock('../../../../util/git');
+
+describe(getName(__filename), () => {
   describe('ensureOnboardingPr()', () => {
     let config: RenovateConfig;
     let packageFiles: Record<string, PackageFile[]>;
@@ -24,8 +30,9 @@ describe('workers/repository/onboarding/pr', () => {
       };
       packageFiles = { npm: [{ packageFile: 'package.json', deps: [] }] };
       branches = [];
-      platform.getPrBody = jest.fn((input) => input);
+      platform.massageMarkdown = jest.fn((input) => input);
       platform.createPr.mockResolvedValueOnce(partial<Pr>({}));
+      setAdminConfig();
     });
     let createPrBody: string;
     it('returns if onboarded', async () => {
@@ -44,7 +51,6 @@ describe('workers/repository/onboarding/pr', () => {
         partial<Pr>({
           title: 'Configure Renovate',
           body: createPrBody,
-          isModified: false,
         })
       );
       await ensureOnboardingPr(config, packageFiles, branches);
@@ -58,9 +64,9 @@ describe('workers/repository/onboarding/pr', () => {
           title: 'Configure Renovate',
           body: createPrBody,
           isConflicted: true,
-          isModified: true,
         })
       );
+      git.isBranchModified.mockResolvedValueOnce(true);
       await ensureOnboardingPr(config, {}, branches);
       expect(platform.createPr).toHaveBeenCalledTimes(0);
       expect(platform.updatePr).toHaveBeenCalledTimes(1);
@@ -71,9 +77,9 @@ describe('workers/repository/onboarding/pr', () => {
         partial<Pr>({
           title: 'Configure Renovate',
           body: createPrBody,
-          isModified: true,
         })
       );
+      git.isBranchModified.mockResolvedValueOnce(true);
       await ensureOnboardingPr(config, {}, branches);
       expect(platform.createPr).toHaveBeenCalledTimes(0);
       expect(platform.updatePr).toHaveBeenCalledTimes(1);
@@ -82,6 +88,35 @@ describe('workers/repository/onboarding/pr', () => {
       config.requireConfig = false;
       await ensureOnboardingPr(config, packageFiles, branches);
       expect(platform.createPr).toHaveBeenCalledTimes(1);
+    });
+    it('dryrun of updates PR when modified', async () => {
+      setAdminConfig({ dryRun: true });
+      config.baseBranch = 'some-branch';
+      platform.getBranchPr.mockResolvedValueOnce(
+        partial<Pr>({
+          title: 'Configure Renovate',
+          body: createPrBody,
+          isConflicted: true,
+        })
+      );
+      git.isBranchModified.mockResolvedValueOnce(true);
+      await ensureOnboardingPr(config, {}, branches);
+      expect(logger.info).toHaveBeenCalledWith(
+        'DRY-RUN: Would check branch renovate/configure'
+      );
+      expect(logger.info).toHaveBeenLastCalledWith(
+        'DRY-RUN: Would update onboarding PR'
+      );
+    });
+    it('dryrun of creates PR', async () => {
+      setAdminConfig({ dryRun: true });
+      await ensureOnboardingPr(config, packageFiles, branches);
+      expect(logger.info).toHaveBeenCalledWith(
+        'DRY-RUN: Would check branch renovate/configure'
+      );
+      expect(logger.info).toHaveBeenLastCalledWith(
+        'DRY-RUN: Would create onboarding PR'
+      );
     });
   });
 });

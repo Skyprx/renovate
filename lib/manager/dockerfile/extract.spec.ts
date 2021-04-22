@@ -1,12 +1,18 @@
 import { readFileSync } from 'fs';
-import { extractPackageFile } from './extract';
+import { getName } from '../../../test/util';
+import { extractPackageFile, getDep } from './extract';
 
 const d1 = readFileSync(
-  'lib/manager/dockerfile/__fixtures__/Dockerfile1',
+  'lib/manager/dockerfile/__fixtures__/1.Dockerfile',
   'utf8'
 );
 
-describe('lib/manager/dockerfile/extract', () => {
+const d2 = readFileSync(
+  'lib/manager/dockerfile/__fixtures__/2.Dockerfile',
+  'utf8'
+);
+
+describe(getName(__filename), () => {
   describe('extractPackageFile()', () => {
     it('handles no FROM', () => {
       const res = extractPackageFile('no from!');
@@ -81,7 +87,7 @@ describe('lib/manager/dockerfile/extract', () => {
       ).deps;
       expect(res).toMatchSnapshot();
     });
-    it('handles abnoral spacing', () => {
+    it('handles abnormal spacing', () => {
       const res = extractPackageFile(
         'FROM    registry.allmine.info:5005/node:8.7.0\n\n'
       ).deps;
@@ -94,7 +100,7 @@ describe('lib/manager/dockerfile/extract', () => {
       expect(res).toMatchSnapshot();
       expect(res).toHaveLength(2);
     });
-    it('skips scratchs', () => {
+    it('skips scratches', () => {
       const res = extractPackageFile('FROM scratch\nADD foo\n');
       expect(res).toBeNull();
     });
@@ -142,9 +148,23 @@ describe('lib/manager/dockerfile/extract', () => {
       expect(res).toMatchSnapshot();
       expect(res).toHaveLength(2);
     });
+    it('extracts images from all sorts of (maybe multiline) FROM and COPY --from statements', () => {
+      const res = extractPackageFile(d2).deps;
+      expect(res).toMatchSnapshot();
+      expect(res).toHaveLength(9);
+    });
     it('handles calico/node', () => {
       const res = extractPackageFile('FROM calico/node\n').deps;
       expect(res).toMatchSnapshot();
+    });
+    it('handles ubuntu', () => {
+      const res = extractPackageFile('FROM ubuntu:18.04\n').deps;
+      expect(res).toMatchSnapshot();
+    });
+  });
+  describe('getDep()', () => {
+    it('rejects null', () => {
+      expect(getDep(null)).toMatchSnapshot();
     });
   });
 });

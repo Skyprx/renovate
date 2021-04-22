@@ -1,13 +1,21 @@
-import { RenovateConfig } from '..';
-import { mocked } from '../../../test/util';
+import { getName, mocked } from '../../../test/util';
+import type { RenovateConfig } from '../types';
 import presetIkatyang from './__fixtures__/renovate-config-ikatyang.json';
+import * as _local from './local';
 import * as _npm from './npm';
+import {
+  PRESET_DEP_NOT_FOUND,
+  PRESET_NOT_FOUND,
+  PRESET_RENOVATE_CONFIG_NOT_FOUND,
+} from './util';
 import * as presets from '.';
 
 jest.mock('./npm');
 jest.mock('./github');
+jest.mock('./local');
 
 const npm = mocked(_npm);
+const local = mocked(_local);
 
 npm.getPreset = jest.fn(({ packageName, presetName }) => {
   if (packageName === 'renovate-config-ikatyang') {
@@ -16,21 +24,21 @@ npm.getPreset = jest.fn(({ packageName, presetName }) => {
     ][presetName];
   }
   if (packageName === 'renovate-config-notfound') {
-    throw new Error('dep not found');
+    throw new Error(PRESET_DEP_NOT_FOUND);
   }
   if (packageName === 'renovate-config-noconfig') {
-    throw new Error('preset renovate-config not found');
+    throw new Error(PRESET_RENOVATE_CONFIG_NOT_FOUND);
   }
   if (packageName === 'renovate-config-throw') {
     throw new Error('whoops');
   }
   if (packageName === 'renovate-config-wrongpreset') {
-    throw new Error('preset not found');
+    throw new Error(PRESET_NOT_FOUND);
   }
   return null;
 });
 
-describe('config/presets', () => {
+describe(getName(__filename), () => {
   describe('resolvePreset', () => {
     let config: RenovateConfig;
     beforeEach(() => {
@@ -53,7 +61,7 @@ describe('config/presets', () => {
         e = err;
       }
       expect(e).toBeDefined();
-      expect(e.configFile).toMatchSnapshot();
+      expect(e.location).toMatchSnapshot();
       expect(e.validationError).toMatchSnapshot();
       expect(e.validationMessage).toMatchSnapshot();
     });
@@ -67,7 +75,37 @@ describe('config/presets', () => {
         e = err;
       }
       expect(e).toBeDefined();
-      expect(e.configFile).toMatchSnapshot();
+      expect(e.location).toMatchSnapshot();
+      expect(e.validationError).toMatchSnapshot();
+      expect(e.validationMessage).toMatchSnapshot();
+    });
+
+    it('throws if path + invalid syntax', async () => {
+      config.foo = 1;
+      config.extends = ['github>user/repo//'];
+      let e: Error;
+      try {
+        await presets.resolveConfigPresets(config);
+      } catch (err) {
+        e = err;
+      }
+      expect(e).toBeDefined();
+      expect(e.location).toMatchSnapshot();
+      expect(e.validationError).toMatchSnapshot();
+      expect(e.validationMessage).toMatchSnapshot();
+    });
+
+    it('throws if path + sub-preset', async () => {
+      config.foo = 1;
+      config.extends = ['github>user/repo//path:subpreset'];
+      let e: Error;
+      try {
+        await presets.resolveConfigPresets(config);
+      } catch (err) {
+        e = err;
+      }
+      expect(e).toBeDefined();
+      expect(e.location).toMatchSnapshot();
       expect(e.validationError).toMatchSnapshot();
       expect(e.validationMessage).toMatchSnapshot();
     });
@@ -82,7 +120,7 @@ describe('config/presets', () => {
         e = err;
       }
       expect(e).toBeDefined();
-      expect(e.configFile).toMatchSnapshot();
+      expect(e.location).toMatchSnapshot();
       expect(e.validationError).toMatchSnapshot();
       expect(e.validationMessage).toMatchSnapshot();
     });
@@ -97,7 +135,7 @@ describe('config/presets', () => {
         e = err;
       }
       expect(e).toBeDefined();
-      expect(e.configFile).toMatchSnapshot();
+      expect(e.location).toMatchSnapshot();
       expect(e.validationError).toMatchSnapshot();
       expect(e.validationMessage).toMatchSnapshot();
     });
@@ -120,7 +158,7 @@ describe('config/presets', () => {
         e = err;
       }
       expect(e).toBeDefined();
-      expect(e.configFile).toMatchSnapshot();
+      expect(e.location).toMatchSnapshot();
       expect(e.validationError).toMatchSnapshot();
       expect(e.validationMessage).toMatchSnapshot();
     });
@@ -143,14 +181,15 @@ describe('config/presets', () => {
       config.extends = ['packages:eslint'];
       const res = await presets.resolveConfigPresets(config);
       expect(res).toMatchSnapshot();
-      expect(res.packagePatterns).toHaveLength(1);
+      expect(res.matchPackagePrefixes).toHaveLength(2);
     });
     it('resolves linters', async () => {
       config.extends = ['packages:linters'];
       const res = await presets.resolveConfigPresets(config);
       expect(res).toMatchSnapshot();
-      expect(res.packageNames).toHaveLength(3);
-      expect(res.packagePatterns).toHaveLength(3);
+      expect(res.matchPackageNames).toHaveLength(3);
+      expect(res.matchPackagePatterns).toHaveLength(1);
+      expect(res.matchPackagePrefixes).toHaveLength(4);
     });
     it('resolves nested groups', async () => {
       config.extends = [':automergeLinters'];
@@ -158,8 +197,9 @@ describe('config/presets', () => {
       expect(res).toMatchSnapshot();
       const rule = res.packageRules[0];
       expect(rule.automerge).toBe(true);
-      expect(rule.packageNames).toHaveLength(3);
-      expect(rule.packagePatterns).toHaveLength(3);
+      expect(rule.matchPackageNames).toHaveLength(3);
+      expect(rule.matchPackagePatterns).toHaveLength(1);
+      expect(rule.matchPackagePrefixes).toHaveLength(4);
     });
     it('migrates automerge in presets', async () => {
       config.extends = ['ikatyang:library'];
@@ -175,6 +215,20 @@ describe('config/presets', () => {
         'config:base',
       ]);
       expect(config).toMatchObject(res);
+      expect(res).toMatchSnapshot();
+    });
+
+    it('resolves self-hosted presets without baseConfig', async () => {
+      config.extends = ['local>username/preset-repo'];
+      local.getPreset = jest.fn(({ packageName, presetName, baseConfig }) =>
+        Promise.resolve({ labels: ['self-hosted resolved'] })
+      );
+
+      const res = await presets.resolveConfigPresets(config);
+
+      expect(res.labels).toEqual(['self-hosted resolved']);
+      expect(local.getPreset.mock.calls).toHaveLength(1);
+      expect(local.getPreset.mock.calls[0][0].baseConfig).not.toBeUndefined();
       expect(res).toMatchSnapshot();
     });
   });
@@ -246,11 +300,29 @@ describe('config/presets', () => {
         )
       ).toMatchSnapshot();
     });
+    it('parses github subdirectories', () => {
+      expect(
+        presets.parsePreset('github>some/repo//somepath/somesubpath/somefile')
+      ).toMatchSnapshot();
+    });
+    it('parses github toplevel file using subdirectory syntax', () => {
+      expect(
+        presets.parsePreset('github>some/repo//somefile')
+      ).toMatchSnapshot();
+    });
     it('parses gitlab', () => {
       expect(presets.parsePreset('gitlab>some/repo')).toMatchSnapshot();
     });
+    it('parses gitea', () => {
+      expect(presets.parsePreset('gitea>some/repo')).toMatchSnapshot();
+    });
     it('parses local', () => {
       expect(presets.parsePreset('local>some/repo')).toMatchSnapshot();
+    });
+    it('parses local with subdirectory', () => {
+      expect(
+        presets.parsePreset('local>some-group/some-repo//some-dir/some-file')
+      ).toMatchSnapshot();
     });
     it('parses no prefix as local', () => {
       expect(presets.parsePreset('some/repo')).toMatchSnapshot();
@@ -320,11 +392,19 @@ describe('config/presets', () => {
     });
   });
   describe('getPreset', () => {
+    it('handles removed presets with a migration', async () => {
+      const res = await presets.getPreset(':masterIssue', {});
+      expect(res).toMatchSnapshot();
+    });
+    it('handles removed presets with no migration', async () => {
+      const res = await presets.getPreset('helpers:oddIsUnstable', {});
+      expect(res).toEqual({});
+    });
     it('gets linters', async () => {
       const res = await presets.getPreset('packages:linters', {});
       expect(res).toMatchSnapshot();
-      expect(res.packageNames).toHaveLength(1);
-      expect(res.extends).toHaveLength(3);
+      expect(res.matchPackageNames).toHaveLength(1);
+      expect(res.extends).toHaveLength(4);
     });
     it('gets parameterised configs', async () => {
       const res = await presets.getPreset(
@@ -349,7 +429,7 @@ describe('config/presets', () => {
         e = err;
       }
       expect(e).toBeDefined();
-      expect(e.configFile).toMatchSnapshot();
+      expect(e.location).toMatchSnapshot();
       expect(e.validationError).toMatchSnapshot();
       expect(e.validationMessage).toMatchSnapshot();
     });
@@ -361,7 +441,7 @@ describe('config/presets', () => {
         e = err;
       }
       expect(e).toBeDefined();
-      expect(e.configFile).toMatchSnapshot();
+      expect(e.location).toMatchSnapshot();
       expect(e.validationError).toMatchSnapshot();
       expect(e.validationMessage).toMatchSnapshot();
     });
@@ -373,7 +453,7 @@ describe('config/presets', () => {
         e = err;
       }
       expect(e).toBeDefined();
-      expect(e.configFile).toMatchSnapshot();
+      expect(e.location).toMatchSnapshot();
       expect(e.validationError).toMatchSnapshot();
       expect(e.validationMessage).toMatchSnapshot();
     });
@@ -385,7 +465,7 @@ describe('config/presets', () => {
         e = err;
       }
       expect(e).toBeDefined();
-      expect(e.configFile).toMatchSnapshot();
+      expect(e.location).toMatchSnapshot();
       expect(e.validationError).toMatchSnapshot();
       expect(e.validationMessage).toMatchSnapshot();
     });

@@ -3,7 +3,7 @@ import * as datasourceGo from '../../datasource/go';
 import { logger } from '../../logger';
 import { SkipReason } from '../../types';
 import { isVersion } from '../../versioning/semver';
-import { PackageDependency, PackageFile } from '../common';
+import type { PackageDependency, PackageFile } from '../types';
 
 function getDep(
   lineNumber: number,
@@ -21,18 +21,10 @@ function getDep(
     depType: type,
     currentValue,
   };
-  if (!isVersion(currentValue)) {
-    dep.skipReason = SkipReason.UnsupportedVersion;
-  } else {
-    if (depName.startsWith('gopkg.in/')) {
-      const [pkg] = depName.replace('gopkg.in/', '').split('.');
-      dep.depNameShort = pkg;
-    } else if (depName.startsWith('github.com/')) {
-      dep.depNameShort = depName.replace('github.com/', '');
-    } else {
-      dep.depNameShort = depName;
-    }
+  if (isVersion(currentValue)) {
     dep.datasource = datasourceGo.id;
+  } else {
+    dep.skipReason = SkipReason.UnsupportedVersion;
   }
   const digestMatch = /v0\.0.0-\d{14}-([a-f0-9]{12})/.exec(currentValue);
   if (digestMatch) {
@@ -44,14 +36,14 @@ function getDep(
 
 export function extractPackageFile(content: string): PackageFile | null {
   logger.trace({ content }, 'gomod.extractPackageFile()');
-  const compatibility: Record<string, any> = {};
+  const constraints: Record<string, any> = {};
   const deps: PackageDependency[] = [];
   try {
     const lines = content.split('\n');
     for (let lineNumber = 0; lineNumber < lines.length; lineNumber += 1) {
       let line = lines[lineNumber];
       if (line.startsWith('go ') && validRange(line.replace('go ', ''))) {
-        compatibility.go = line.replace('go ', '');
+        constraints.go = line.replace('go ', '');
       }
       const replaceMatch = /^replace\s+[^\s]+[\s]+[=][>]\s+([^\s]+)\s+([^\s]+)/.exec(
         line
@@ -90,5 +82,5 @@ export function extractPackageFile(content: string): PackageFile | null {
   if (!deps.length) {
     return null;
   }
-  return { compatibility, deps };
+  return { constraints, deps };
 }

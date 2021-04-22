@@ -1,11 +1,15 @@
-import { move, pathExists, readFile, remove } from 'fs-extra';
 import { validRange } from 'semver';
 import { quote } from 'shlex';
 import { join } from 'upath';
-import { SYSTEM_INSUFFICIENT_DISK_SPACE } from '../../../constants/error-messages';
+import { getAdminConfig } from '../../../config/admin';
+import {
+  SYSTEM_INSUFFICIENT_DISK_SPACE,
+  TEMPORARY_ERROR,
+} from '../../../constants/error-messages';
 import { logger } from '../../../logger';
 import { ExecOptions, exec } from '../../../util/exec';
-import { PostUpdateConfig, Upgrade } from '../../common';
+import { move, pathExists, readFile, remove } from '../../../util/fs';
+import type { PostUpdateConfig, Upgrade } from '../../types';
 import { getNodeConstraint } from './node-version';
 
 export interface GenerateLockFileResult {
@@ -27,17 +31,25 @@ export async function generateLockFile(
   let lockFile = null;
   try {
     let installNpm = 'npm i -g npm';
-    const npmCompatibility = config.compatibility?.npm;
-    if (validRange(npmCompatibility)) {
-      installNpm += `@${quote(npmCompatibility)}`;
+    const npmCompatibility = config.constraints?.npm as string;
+    // istanbul ignore else
+    if (npmCompatibility) {
+      // istanbul ignore else
+      if (validRange(npmCompatibility)) {
+        installNpm = `npm i -g ${quote(`npm@${npmCompatibility}`)} || true`;
+      } else {
+        logger.debug(
+          { npmCompatibility },
+          'npm compatibility range is not valid - skipping'
+        );
+      }
+    } else {
+      logger.debug('No npm compatibility range found - installing npm latest');
     }
-    const preCommands = [installNpm];
+    const preCommands = [installNpm, 'hash -d npm'];
     const commands = [];
     let cmdOptions = '';
-    if (
-      (postUpdateOptions && postUpdateOptions.includes('npmDedupe')) ||
-      skipInstalls === false
-    ) {
+    if (postUpdateOptions?.includes('npmDedupe') || skipInstalls === false) {
       logger.debug('Performing node_modules install');
       cmdOptions += '--ignore-scripts --no-audit';
     } else {
@@ -52,17 +64,16 @@ export async function generateLockFile(
         npm_config_store: env.npm_config_store,
       },
       docker: {
-        image: 'renovate/node',
+        image: 'node',
         tagScheme: 'npm',
         tagConstraint,
         preCommands,
       },
     };
-    if (config.dockerMapDotfiles) {
-      const homeDir =
-        process.env.HOME || process.env.HOMEPATH || process.env.USERPROFILE;
-      const homeNpmrc = join(homeDir, '.npmrc');
-      execOptions.docker.volumes = [[homeNpmrc, '/home/ubuntu/.npmrc']];
+    // istanbul ignore if
+    if (getAdminConfig().exposeAllEnv) {
+      execOptions.extraEnv.NPM_AUTH = env.NPM_AUTH;
+      execOptions.extraEnv.NPM_EMAIL = env.NPM_EMAIL;
     }
 
     if (!upgrades.every((upgrade) => upgrade.isLockfileUpdate)) {
@@ -77,9 +88,14 @@ export async function generateLockFile(
       const updateCmd =
         `npm install ${cmdOptions}` +
         lockUpdates
-          .map((update) => ` ${update.depName}@${update.toVersion}`)
+          .map((update) => ` ${update.depName}@${update.newVersion}`)
           .join('');
       commands.push(updateCmd);
+    }
+
+    if (upgrades.some((upgrade) => upgrade.isRemediation)) {
+      // We need to run twice to get the correct lock file
+      commands.push(`npm install ${cmdOptions}`.trim());
     }
 
     // postUpdateOptions
@@ -120,6 +136,9 @@ export async function generateLockFile(
     // Read the result
     lockFile = await readFile(join(cwd, filename), 'utf8');
   } catch (err) /* istanbul ignore next */ {
+    if (err.message === TEMPORARY_ERROR) {
+      throw err;
+    }
     logger.debug(
       {
         err,

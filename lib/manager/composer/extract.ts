@@ -5,28 +5,24 @@ import { logger } from '../../logger';
 import { SkipReason } from '../../types';
 import { readLocalFile } from '../../util/fs';
 import { api as semverComposer } from '../../versioning/composer';
-import { PackageDependency, PackageFile } from '../common';
+import type { PackageDependency, PackageFile } from '../types';
+import type {
+  ComposerConfig,
+  ComposerLock,
+  ComposerManagerData,
+  Repo,
+} from './types';
+import { extractContraints } from './utils';
 
-interface Repo {
-  name?: string;
-  type: 'composer' | 'git' | 'package' | 'vcs';
-  packagist?: boolean;
-  'packagist.org'?: boolean;
-  url: string;
-}
-
-interface ComposerConfig {
-  type?: string;
-  /**
-   * A repositories field can be an array of Repo objects or an object of repoName: Repo
-   * Also it can be a boolean (usually false) to disable packagist.
-   * (Yes this can be confusing, as it is also not properly documented in the composer docs)
-   * See https://getcomposer.org/doc/05-repositories.md#disabling-packagist-org
-   */
-  repositories: Record<string, Repo | boolean> | Repo[];
-
-  require: Record<string, string>;
-  'require-dev': Record<string, string>;
+/**
+ * The regUrl is expected to be a base URL. GitLab composer repository installation guide specifies
+ * to use a base URL containing packages.json. Composer still works in this scenario by determining
+ * whether to add / remove packages.json from the URL.
+ *
+ * See https://github.com/composer/composer/blob/750a92b4b7aecda0e5b2f9b963f1cb1421900675/src/Composer/Repository/ComposerRepository.php#L815
+ */
+function transformRegUrl(url: string): string {
+  return url.replace(/(\/packages\.json)$/, '');
 }
 
 /**
@@ -53,7 +49,7 @@ function parseRepositories(
             repositories[name] = repo;
             break;
           case 'composer':
-            registryUrls.push(repo.url);
+            registryUrls.push(transformRegUrl(repo.url));
             break;
           case 'package':
             logger.debug(
@@ -64,10 +60,8 @@ function parseRepositories(
         if (repo.packagist === false || repo['packagist.org'] === false) {
           packagist = false;
         }
-      } else if (
-        ['packagist', 'packagist.org'].includes(key) &&
-        repo === false
-      ) {
+      } // istanbul ignore else: invalid repo
+      else if (['packagist', 'packagist.org'].includes(key) && repo === false) {
         packagist = false;
       }
     });
@@ -103,11 +97,12 @@ export async function extractPackageFile(
   // handle lockfile
   const lockfilePath = fileName.replace(/\.json$/, '.lock');
   const lockContents = await readLocalFile(lockfilePath, 'utf8');
-  let lockParsed;
+  let lockParsed: ComposerLock;
   if (lockContents) {
     logger.debug({ packageFile: fileName }, 'Found composer lock file');
+    res.lockFiles = [lockfilePath];
     try {
-      lockParsed = JSON.parse(lockContents);
+      lockParsed = JSON.parse(lockContents) as ComposerLock;
     } catch (err) /* istanbul ignore next */ {
       logger.warn({ err }, 'Error processing composer.lock');
     }
@@ -120,6 +115,9 @@ export async function extractPackageFile(
   if (registryUrls.length !== 0) {
     res.registryUrls = registryUrls;
   }
+
+  res.constraints = extractContraints(composerJson, lockParsed);
+
   const deps = [];
   const depTypes = ['require', 'require-dev'];
   for (const depType of depTypes) {
@@ -160,7 +158,11 @@ export async function extractPackageFile(
             dep.skipReason = SkipReason.AnyVersion;
           }
           if (lockParsed) {
-            const lockedDep = lockParsed.packages.find(
+            const lockField =
+              depType === 'require'
+                ? 'packages'
+                : /* istanbul ignore next */ 'packages-dev';
+            const lockedDep = lockParsed[lockField]?.find(
               (item) => item.name === dep.depName
             );
             if (lockedDep && semverComposer.isVersion(lockedDep.version)) {
@@ -179,8 +181,11 @@ export async function extractPackageFile(
     return null;
   }
   res.deps = deps;
-  if (composerJson.type) {
-    res.managerData = { composerJsonType: composerJson.type };
+  if (is.string(composerJson.type)) {
+    const managerData: ComposerManagerData = {
+      composerJsonType: composerJson.type,
+    };
+    res.managerData = managerData;
   }
   return res;
 }

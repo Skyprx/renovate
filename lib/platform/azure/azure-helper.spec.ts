@@ -1,7 +1,8 @@
 import { Readable } from 'stream';
 import { GitPullRequestMergeStrategy } from 'azure-devops-node-api/interfaces/GitInterfaces';
+import { getName } from '../../../test/util';
 
-describe('platform/azure/helpers', () => {
+describe(getName(__filename), () => {
   let azureHelper: typeof import('./azure-helper');
   let azureApi: jest.Mocked<typeof import('./azure-got-wrapper')>;
 
@@ -11,56 +12,6 @@ describe('platform/azure/helpers', () => {
     jest.mock('./azure-got-wrapper');
     azureHelper = require('./azure-helper');
     azureApi = require('./azure-got-wrapper');
-  });
-
-  describe('getStorageExtraCloneOpts', () => {
-    it('should configure basic auth', () => {
-      const res = azureHelper.getStorageExtraCloneOpts({
-        username: 'user',
-        password: 'pass',
-      });
-      expect(res).toMatchSnapshot();
-    });
-    it('should configure personal access token', () => {
-      const res = azureHelper.getStorageExtraCloneOpts({
-        token: '1234567890123456789012345678901234567890123456789012',
-      });
-      expect(res).toMatchSnapshot();
-    });
-    it('should configure bearer token', () => {
-      const res = azureHelper.getStorageExtraCloneOpts({ token: 'token' });
-      expect(res).toMatchSnapshot();
-    });
-  });
-
-  describe('getNewBranchName', () => {
-    it('should add refs/heads', () => {
-      const res = azureHelper.getNewBranchName('testBB');
-      expect(res).toBe(`refs/heads/testBB`);
-    });
-    it('should be the same', () => {
-      const res = azureHelper.getNewBranchName('refs/heads/testBB');
-      expect(res).toBe(`refs/heads/testBB`);
-    });
-  });
-
-  describe('getBranchNameWithoutRefsheadsPrefix', () => {
-    it('should be renamed', () => {
-      const res = azureHelper.getBranchNameWithoutRefsheadsPrefix(
-        'refs/heads/testBB'
-      );
-      expect(res).toBe(`testBB`);
-    });
-    it('should log error and return undefined', () => {
-      const res = azureHelper.getBranchNameWithoutRefsheadsPrefix(
-        undefined as any
-      );
-      expect(res).toBeUndefined();
-    });
-    it('should return the input', () => {
-      const res = azureHelper.getBranchNameWithoutRefsheadsPrefix('testBB');
-      expect(res).toBe('testBB');
-    });
   });
 
   describe('getRef', () => {
@@ -233,43 +184,6 @@ describe('platform/azure/helpers', () => {
     });
   });
 
-  describe('max4000Chars', () => {
-    it('should be the same', () => {
-      const res = azureHelper.max4000Chars('Hello');
-      expect(res).toMatchSnapshot();
-    });
-    it('should be truncated', () => {
-      let str = '';
-      for (let i = 0; i < 5000; i += 1) {
-        str += 'a';
-      }
-      const res = azureHelper.max4000Chars(str);
-      expect(res).toHaveLength(3999);
-    });
-  });
-
-  describe('getRenovatePRFormat', () => {
-    it('should be formated (closed)', () => {
-      const res = azureHelper.getRenovatePRFormat({ status: 2 } as any);
-      expect(res).toMatchSnapshot();
-    });
-
-    it('should be formated (closed v2)', () => {
-      const res = azureHelper.getRenovatePRFormat({ status: 3 } as any);
-      expect(res).toMatchSnapshot();
-    });
-
-    it('should be formated (not closed)', () => {
-      const res = azureHelper.getRenovatePRFormat({ status: 1 } as any);
-      expect(res).toMatchSnapshot();
-    });
-
-    it('should be formated (isConflicted)', () => {
-      const res = azureHelper.getRenovatePRFormat({ mergeStatus: 2 } as any);
-      expect(res).toMatchSnapshot();
-    });
-  });
-
   describe('getCommitDetails', () => {
     it('should get commit details', async () => {
       azureApi.gitApi.mockImplementationOnce(
@@ -282,26 +196,6 @@ describe('platform/azure/helpers', () => {
       );
       const res = await azureHelper.getCommitDetails('123', '123456');
       expect(res).toMatchSnapshot();
-    });
-  });
-
-  describe('getProjectAndRepo', () => {
-    it('should return the object with same strings', () => {
-      const res = azureHelper.getProjectAndRepo('myRepoName');
-      expect(res).toMatchSnapshot();
-    });
-    it('should return the object with project and repo', () => {
-      const res = azureHelper.getProjectAndRepo('prjName/myRepoName');
-      expect(res).toMatchSnapshot();
-    });
-    it('should return an error', () => {
-      expect(() =>
-        azureHelper.getProjectAndRepo('prjName/myRepoName/blalba')
-      ).toThrow(
-        Error(
-          `prjName/myRepoName/blalba can be only structured this way : 'repository' or 'projectName/repository'!`
-        )
-      );
     });
   });
 
@@ -340,6 +234,101 @@ describe('platform/azure/helpers', () => {
       );
       expect(await azureHelper.getMergeMethod('', '')).toEqual(
         GitPullRequestMergeStrategy.Squash
+      );
+    });
+    it('should return most specific exact branch policy', async () => {
+      const refMock = 'refs/heads/ding';
+      azureApi.policyApi.mockImplementationOnce(
+        () =>
+          ({
+            getPolicyConfigurations: jest.fn(() => [
+              {
+                settings: {
+                  allowSquash: true,
+                  scope: [
+                    {
+                      repositoryId: 'doo-dee-doo-repository-id',
+                    },
+                  ],
+                },
+                type: {
+                  id: 'fa4e907d-c16b-4a4c-9dfa-4916e5d171ab',
+                },
+              },
+              {
+                settings: {
+                  allowSquash: true,
+                  scope: [
+                    {
+                      repositoryId: '',
+                    },
+                  ],
+                },
+                type: {
+                  id: 'fa4e907d-c16b-4a4c-9dfa-4916e5d171ab',
+                },
+              },
+              {
+                settings: {
+                  allowRebase: true,
+                  scope: [
+                    {
+                      matchKind: 'Exact',
+                      refName: refMock,
+                      repositoryId: '',
+                    },
+                  ],
+                },
+                type: {
+                  id: 'fa4e907d-c16b-4a4c-9dfa-4916e5d171ab',
+                },
+              },
+            ]),
+          } as any)
+      );
+      expect(await azureHelper.getMergeMethod('', '', refMock)).toEqual(
+        GitPullRequestMergeStrategy.Rebase
+      );
+    });
+    it('should return most specific prefix branch policy', async () => {
+      const refMock = 'refs/heads/ding-wow';
+      azureApi.policyApi.mockImplementationOnce(
+        () =>
+          ({
+            getPolicyConfigurations: jest.fn(() => [
+              {
+                settings: {
+                  allowSquash: true,
+                  scope: [
+                    {
+                      repositoryId: '',
+                    },
+                  ],
+                },
+                type: {
+                  id: 'fa4e907d-c16b-4a4c-9dfa-4916e5d171ab',
+                },
+              },
+              {
+                settings: {
+                  allowRebase: true,
+                  scope: [
+                    {
+                      matchKind: 'Prefix',
+                      refName: 'refs/heads/ding',
+                      repositoryId: '',
+                    },
+                  ],
+                },
+                type: {
+                  id: 'fa4e907d-c16b-4a4c-9dfa-4916e5d171ab',
+                },
+              },
+            ]),
+          } as any)
+      );
+      expect(await azureHelper.getMergeMethod('', '', refMock)).toEqual(
+        GitPullRequestMergeStrategy.Rebase
       );
     });
   });

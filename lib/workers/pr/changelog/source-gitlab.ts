@@ -1,71 +1,37 @@
 import URL from 'url';
-import { Release } from '../../../datasource';
+import type { Release } from '../../../datasource/types';
 import { logger } from '../../../logger';
-import * as globalCache from '../../../util/cache/global';
-import * as runCache from '../../../util/cache/run';
-import { GitlabHttp } from '../../../util/http/gitlab';
+import * as memCache from '../../../util/cache/memory';
+import * as packageCache from '../../../util/cache/package';
 import { regEx } from '../../../util/regex';
 import * as allVersioning from '../../../versioning';
-import { BranchUpgradeConfig } from '../../common';
-import { ChangeLogRelease, ChangeLogResult } from './common';
+import type { BranchUpgradeConfig } from '../../types';
+import { getTags } from './gitlab';
 import { addReleaseNotes } from './release-notes';
-
-const gitlabHttp = new GitlabHttp();
+import type { ChangeLogRelease, ChangeLogResult } from './types';
 
 const cacheNamespace = 'changelog-gitlab-release';
 
-async function getTagsInner(
-  endpoint: string,
-  versionScheme: string,
-  repository: string
-): Promise<string[]> {
-  logger.trace('getTags() from gitlab');
-  let url = endpoint;
-  const repoid = repository.replace(/\//g, '%2F');
-  url += `projects/${repoid}/repository/tags`;
-  try {
-    const res = await gitlabHttp.getJson<{ name: string }[]>(url, {
-      paginate: true,
-    });
-
-    const tags = (res && res.body) || [];
-
-    if (!tags.length) {
-      logger.debug({ sourceRepo: repository }, 'repository has no Gitlab tags');
-    }
-
-    return tags.map((tag) => tag.name).filter(Boolean);
-  } catch (err) {
-    logger.info({ sourceRepo: repository }, 'Failed to fetch Gitlab tags');
-    // istanbul ignore if
-    if (err.message && err.message.includes('Bad credentials')) {
-      logger.warn('Bad credentials triggering tag fail lookup in changelog');
-      throw err;
-    }
-    return [];
-  }
-}
-
-async function getTags(
+function getCachedTags(
   endpoint: string,
   versionScheme: string,
   repository: string
 ): Promise<string[]> {
   const cacheKey = `getTags-${endpoint}-${versionScheme}-${repository}`;
-  const cachedResult = runCache.get(cacheKey);
+  const cachedResult = memCache.get<Promise<string[]>>(cacheKey);
   // istanbul ignore if
   if (cachedResult !== undefined) {
     return cachedResult;
   }
-  const promisedRes = getTagsInner(endpoint, versionScheme, repository);
-  runCache.set(cacheKey, promisedRes);
+  const promisedRes = getTags(endpoint, repository);
+  memCache.set(cacheKey, promisedRes);
   return promisedRes;
 }
 
 export async function getChangeLogJSON({
   versioning,
-  fromVersion,
-  toVersion,
+  currentVersion,
+  newVersion,
   sourceUrl,
   releases,
   depName,
@@ -85,7 +51,7 @@ export async function getChangeLogJSON({
     logger.info({ sourceUrl }, 'Invalid gitlab URL found');
     return null;
   }
-  if (!(releases && releases.length)) {
+  if (!releases?.length) {
     logger.debug('No releases');
     return null;
   }
@@ -103,9 +69,9 @@ export async function getChangeLogJSON({
 
   async function getRef(release: Release): Promise<string | null> {
     if (!tags) {
-      tags = await getTags(apiBaseUrl, versioning, repository);
+      tags = await getCachedTags(apiBaseUrl, versioning, repository);
     }
-    const regex = regEx(`${depName}[@-]`);
+    const regex = regEx(`(?:${depName}|release)[@-]`);
     const tagName = tags
       .filter((tag) => version.isVersion(tag.replace(regex, '')))
       .find((tag) => version.equals(tag.replace(regex, ''), release.version));
@@ -125,13 +91,13 @@ export async function getChangeLogJSON({
   const changelogReleases: ChangeLogRelease[] = [];
   // compare versions
   const include = (v: string): boolean =>
-    version.isGreaterThan(v, fromVersion) &&
-    !version.isGreaterThan(v, toVersion);
+    version.isGreaterThan(v, currentVersion) &&
+    !version.isGreaterThan(v, newVersion);
   for (let i = 1; i < validReleases.length; i += 1) {
     const prev = validReleases[i - 1];
     const next = validReleases[i];
     if (include(next.version)) {
-      let release = await globalCache.get(
+      let release = await packageCache.get(
         cacheNamespace,
         getCacheKey(prev.version, next.version)
       );
@@ -149,7 +115,7 @@ export async function getChangeLogJSON({
           release.compare.url = `${baseUrl}${repository}/compare/${prevHead}...${nextHead}`;
         }
         const cacheMinutes = 55;
-        await globalCache.set(
+        await packageCache.set(
           cacheNamespace,
           getCacheKey(prev.version, next.version),
           release,

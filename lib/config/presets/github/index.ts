@@ -1,13 +1,16 @@
-import { PLATFORM_FAILURE } from '../../../constants/error-messages';
-import { PLATFORM_TYPE_GITHUB } from '../../../constants/platforms';
 import { logger } from '../../../logger';
-import { Http, HttpOptions } from '../../../util/http';
-import { Preset, PresetConfig } from '../common';
-import { PRESET_DEP_NOT_FOUND, fetchPreset } from '../util';
+import { ExternalHostError } from '../../../types/errors/external-host-error';
+import { GithubHttp } from '../../../util/http/github';
+import type { Preset, PresetConfig } from '../types';
+import {
+  PRESET_DEP_NOT_FOUND,
+  PRESET_INVALID_JSON,
+  fetchPreset,
+} from '../util';
 
 export const Endpoint = 'https://api.github.com/';
 
-const http = new Http(PLATFORM_TYPE_GITHUB);
+const http = new GithubHttp();
 
 export async function fetchJSONFile(
   repo: string,
@@ -15,23 +18,16 @@ export async function fetchJSONFile(
   endpoint: string
 ): Promise<Preset> {
   const url = `${endpoint}repos/${repo}/contents/${fileName}`;
-  const opts: HttpOptions = {
-    headers: {
-      accept: global.appMode
-        ? 'application/vnd.github.machine-man-preview+json'
-        : 'application/vnd.github.v3+json',
-    },
-  };
   let res: { body: { content: string } };
   try {
-    res = await http.getJson(url, opts);
+    res = await http.getJson(url);
   } catch (err) {
     // istanbul ignore if: not testable with nock
-    if (err.message === PLATFORM_FAILURE) {
+    if (err instanceof ExternalHostError) {
       throw err;
     }
     logger.debug(
-      { statusCode: err.statusCode },
+      { statusCode: err.statusCode, url },
       `Failed to retrieve ${fileName} from repo`
     );
     throw new Error(PRESET_DEP_NOT_FOUND);
@@ -41,18 +37,20 @@ export async function fetchJSONFile(
     const parsed = JSON.parse(content);
     return parsed;
   } catch (err) {
-    throw new Error('invalid preset JSON');
+    throw new Error(PRESET_INVALID_JSON);
   }
 }
 
-export async function getPresetFromEndpoint(
+export function getPresetFromEndpoint(
   pkgName: string,
   filePreset: string,
+  presetPath: string,
   endpoint = Endpoint
 ): Promise<Preset> {
   return fetchPreset({
     pkgName,
     filePreset,
+    presetPath,
     endpoint,
     fetch: fetchJSONFile,
   });
@@ -61,6 +59,7 @@ export async function getPresetFromEndpoint(
 export function getPreset({
   packageName: pkgName,
   presetName = 'default',
+  presetPath,
 }: PresetConfig): Promise<Preset> {
-  return getPresetFromEndpoint(pkgName, presetName, Endpoint);
+  return getPresetFromEndpoint(pkgName, presetName, presetPath, Endpoint);
 }

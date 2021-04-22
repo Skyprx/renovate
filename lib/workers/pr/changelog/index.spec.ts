@@ -1,9 +1,9 @@
-import * as httpMock from '../../../../test/httpMock';
-import { partial } from '../../../../test/util';
+import * as httpMock from '../../../../test/http-mock';
+import { getName, partial } from '../../../../test/util';
 import { PLATFORM_TYPE_GITHUB } from '../../../constants/platforms';
 import * as hostRules from '../../../util/host-rules';
 import * as semverVersioning from '../../../versioning/semver';
-import { BranchConfig } from '../../common';
+import type { BranchConfig } from '../../types';
 import { ChangeLogError, getChangeLogJSON } from '.';
 
 jest.mock('../../../datasource/npm');
@@ -14,8 +14,8 @@ const upgrade: BranchConfig = partial<BranchConfig>({
   endpoint: 'https://api.github.com/',
   depName: 'renovate',
   versioning: semverVersioning.id,
-  fromVersion: '1.0.0',
-  toVersion: '3.0.0',
+  currentVersion: '1.0.0',
+  newVersion: '3.0.0',
   sourceUrl: 'https://github.com/chalk/chalk',
   releases: [
     { version: '0.9.0' },
@@ -31,7 +31,7 @@ const upgrade: BranchConfig = partial<BranchConfig>({
   ],
 });
 
-describe('workers/pr/changelog', () => {
+describe(getName(__filename), () => {
   describe('getChangeLogJSON', () => {
     beforeEach(() => {
       httpMock.setup();
@@ -52,12 +52,12 @@ describe('workers/pr/changelog', () => {
       expect(
         await getChangeLogJSON({
           ...upgrade,
-          fromVersion: null,
+          currentVersion: null,
         })
       ).toBeNull();
       expect(httpMock.getTrace()).toHaveLength(0);
     });
-    it('returns null if no fromVersion', async () => {
+    it('returns null if no currentVersion', async () => {
       httpMock.scope(githubApiHost);
       expect(
         await getChangeLogJSON({
@@ -67,13 +67,13 @@ describe('workers/pr/changelog', () => {
       ).toBeNull();
       expect(httpMock.getTrace()).toHaveLength(0);
     });
-    it('returns null if fromVersion equals toVersion', async () => {
+    it('returns null if currentVersion equals newVersion', async () => {
       httpMock.scope(githubApiHost);
       expect(
         await getChangeLogJSON({
           ...upgrade,
-          fromVersion: '1.0.0',
-          toVersion: '1.0.0',
+          currentVersion: '1.0.0',
+          newVersion: '1.0.0',
         })
       ).toBeNull();
       expect(httpMock.getTrace()).toHaveLength(0);
@@ -91,12 +91,12 @@ describe('workers/pr/changelog', () => {
     it('works without Github', async () => {
       httpMock
         .scope(githubApiHost)
+        .get('/repos/chalk/chalk')
+        .times(4)
+        .reply(500)
         .get('/repos/chalk/chalk/tags?per_page=100')
         .reply(500)
         .get('/repos/chalk/chalk/releases?per_page=100')
-        .times(4)
-        .reply(500)
-        .get('/repos/chalk/chalk/contents/')
         .times(4)
         .reply(500);
       expect(

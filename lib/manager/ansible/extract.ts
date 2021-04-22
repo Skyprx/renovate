@@ -1,7 +1,7 @@
 import { logger } from '../../logger';
 import * as dockerVersioning from '../../versioning/docker';
-import { PackageDependency, PackageFile } from '../common';
 import { getDep } from '../dockerfile/extract';
+import type { PackageDependency, PackageFile } from '../types';
 
 export default function extractPackageFile(
   content: string
@@ -26,9 +26,7 @@ export default function extractPackageFile(
       deps.push(dep);
     }
   }
-  deps = deps.filter(
-    (dep) => !(dep.currentValue && dep.currentValue.includes('${'))
-  );
+  deps = deps.filter((dep) => !dep.currentValue?.includes('${'));
   if (!deps.length) {
     return null;
   }

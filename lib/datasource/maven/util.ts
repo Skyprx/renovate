@@ -1,7 +1,8 @@
 import url from 'url';
+import { HOST_DISABLED } from '../../constants/error-messages';
 import { logger } from '../../logger';
-import { Http } from '../../util/http';
-import { DatasourceError } from '../common';
+import { ExternalHostError } from '../../types/errors/external-host-error';
+import { Http, HttpResponse } from '../../util/http';
 
 import { MAVEN_REPO, id } from './common';
 
@@ -56,28 +57,31 @@ function isUnsupportedHostError(err: { name: string }): boolean {
 export async function downloadHttpProtocol(
   pkgUrl: url.URL | string,
   hostType = id
-): Promise<string | null> {
-  let raw: { body: string };
+): Promise<Partial<HttpResponse>> {
+  let raw: HttpResponse;
   try {
     const httpClient = httpByHostType(hostType);
     raw = await httpClient.get(pkgUrl.toString());
-    return raw.body;
+    return raw;
   } catch (err) {
     const failedUrl = pkgUrl.toString();
-    if (isNotFoundError(err)) {
-      logger.debug({ failedUrl }, `Url not found`);
+    if (err.message === HOST_DISABLED) {
+      // istanbul ignore next
+      logger.trace({ failedUrl }, 'Host disabled');
+    } else if (isNotFoundError(err)) {
+      logger.trace({ failedUrl }, `Url not found`);
     } else if (isHostError(err)) {
       // istanbul ignore next
-      logger.warn({ failedUrl }, `Cannot connect to ${hostType} host`);
+      logger.debug({ failedUrl }, `Cannot connect to ${hostType} host`);
     } else if (isPermissionsIssue(err)) {
-      logger.warn(
+      logger.debug(
         { failedUrl },
         'Dependency lookup unauthorized. Please add authentication with a hostRule'
       );
     } else if (isTemporalError(err)) {
       logger.debug({ failedUrl, err }, 'Temporary error');
       if (isMavenCentral(pkgUrl)) {
-        throw new DatasourceError(err);
+        throw new ExternalHostError(err);
       }
     } else if (isConnectionError(err)) {
       // istanbul ignore next
@@ -88,17 +92,22 @@ export async function downloadHttpProtocol(
     } else {
       logger.info({ failedUrl, err }, 'Unknown error');
     }
-    return null;
+    return {};
   }
 }
 
 export async function isHttpResourceExists(
   pkgUrl: url.URL | string,
   hostType = id
-): Promise<boolean | null> {
+): Promise<boolean | string | null> {
   try {
     const httpClient = httpByHostType(hostType);
-    await httpClient.head(pkgUrl.toString());
+    const res = await httpClient.head(pkgUrl.toString());
+    const pkgUrlHost = url.parse(pkgUrl.toString()).host;
+    if (pkgUrlHost === 'repo.maven.apache.org') {
+      const timestamp = res?.headers?.['last-modified'] as string;
+      return timestamp || true;
+    }
     return true;
   } catch (err) {
     if (isNotFoundError(err)) {

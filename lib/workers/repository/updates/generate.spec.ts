@@ -1,14 +1,14 @@
-import { defaultConfig, partial } from '../../../../test/util';
-import { UpdateType } from '../../../config';
+import { defaultConfig, getName, partial } from '../../../../test/util';
+import type { UpdateType } from '../../../config/types';
 import * as datasourceNpm from '../../../datasource/npm';
-import { BranchUpgradeConfig } from '../../common';
+import type { BranchUpgradeConfig } from '../../types';
 import { generateBranchConfig } from './generate';
 
 beforeEach(() => {
   jest.resetAllMocks();
 });
 
-describe('workers/repository/updates/generate', () => {
+describe(getName(__filename), () => {
   describe('generateBranchConfig()', () => {
     it('does not group single upgrade', () => {
       const branch = [
@@ -17,7 +17,6 @@ describe('workers/repository/updates/generate', () => {
           groupName: 'some-group',
           branchName: 'some-branch',
           prTitle: 'some-title',
-          lazyGrouping: true,
           releaseTimestamp: '2017-02-07T20:01:41+00:00',
           foo: 1,
           group: {
@@ -30,23 +29,32 @@ describe('workers/repository/updates/generate', () => {
       expect(res.groupName).toBeUndefined();
       expect(res.releaseTimestamp).toBeDefined();
     });
-    it('groups single upgrade if not lazyGrouping', () => {
+    it('handles lockFileMaintenance', () => {
       const branch = [
         {
-          depName: 'some-dep',
-          groupName: 'some-group',
           branchName: 'some-branch',
           prTitle: 'some-title',
-          lazyGrouping: false,
-          foo: 1,
-          group: {
-            foo: 2,
-          },
+          isLockFileMaintenance: true,
         },
       ];
       const res = generateBranchConfig(branch);
-      expect(res.foo).toBe(2);
-      expect(res.groupName).toBeDefined();
+      expect(res).toMatchSnapshot();
+    });
+    it('handles lockFileUpdate', () => {
+      const branch = [
+        {
+          branchName: 'some-branch',
+          prTitle: 'some-title',
+          isLockfileUpdate: true,
+          currentValue: '^1.0.0',
+          currentVersion: '1.0.0',
+          lockedVersion: '1.0.0',
+          newValue: '^1.0.0',
+          newVersion: '1.0.1',
+        },
+      ];
+      const res = generateBranchConfig(branch);
+      expect(res).toMatchSnapshot();
     });
     it('does not group same upgrades', () => {
       const branch = [
@@ -55,7 +63,6 @@ describe('workers/repository/updates/generate', () => {
           groupName: 'some-group',
           branchName: 'some-branch',
           prTitle: 'some-title',
-          lazyGrouping: true,
           foo: 1,
           group: {
             foo: 2,
@@ -66,7 +73,6 @@ describe('workers/repository/updates/generate', () => {
           groupName: 'some-group',
           branchName: 'some-branch',
           prTitle: 'some-title',
-          lazyGrouping: true,
           foo: 1,
           group: {
             foo: 2,
@@ -86,16 +92,17 @@ describe('workers/repository/updates/generate', () => {
           prTitle: 'some-title',
           commitMessageExtra:
             'to {{#if isMajor}}v{{newMajor}}{{else}}{{#unless isRange}}v{{/unless}}{{newValue}}{{/if}}',
-          lazyGrouping: true,
           foo: 1,
           newValue: '5.1.2',
-          toVersion: '5.1.2',
+          newVersion: '5.1.2',
           group: {
             foo: 2,
           },
           releaseTimestamp: '2017-02-07T20:01:41+00:00',
-          canBeUnpublished: false,
           automerge: true,
+          constraints: {
+            foo: '1.0.0',
+          },
         },
         {
           depName: 'some-other-dep',
@@ -104,15 +111,33 @@ describe('workers/repository/updates/generate', () => {
           prTitle: 'some-title',
           commitMessageExtra:
             'to {{#if isMajor}}v{{newMajor}}{{else}}{{#unless isRange}}v{{/unless}}{{newValue}}{{/if}}',
-          lazyGrouping: true,
           foo: 1,
           newValue: '5.1.2',
-          toVersion: '5.1.2',
+          newVersion: '5.1.2',
           group: {
             foo: 2,
           },
           releaseTimestamp: '2017-02-06T20:01:41+00:00',
-          canBeUnpublished: true,
+          automerge: false,
+          constraints: {
+            foo: '1.0.0',
+            bar: '2.0.0',
+          },
+        },
+        {
+          depName: 'another-dep',
+          groupName: 'some-group',
+          branchName: 'some-branch',
+          prTitle: 'some-title',
+          commitMessageExtra:
+            'to {{#if isMajor}}v{{newMajor}}{{else}}{{#unless isRange}}v{{/unless}}{{newValue}}{{/if}}',
+          foo: 1,
+          newValue: '5.1.2',
+          newVersion: '5.1.2',
+          group: {
+            foo: 2,
+          },
+          releaseTimestamp: '2017-02-06T20:01:41+00:00',
           automerge: false,
         },
       ];
@@ -120,8 +145,11 @@ describe('workers/repository/updates/generate', () => {
       expect(res.foo).toBe(2);
       expect(res.groupName).toBeDefined();
       expect(res.releaseTimestamp).toEqual('2017-02-07T20:01:41+00:00');
-      expect(res.canBeUnpublished).toBe(true);
       expect(res.automerge).toBe(false);
+      expect(res.constraints).toEqual({
+        foo: '1.0.0',
+        bar: '2.0.0',
+      });
     });
     it('groups multiple upgrades different version', () => {
       const branch = [
@@ -132,10 +160,9 @@ describe('workers/repository/updates/generate', () => {
           prTitle: 'some-title',
           commitMessageExtra:
             'to {{#if isMajor}}v{{newMajor}}{{else}}{{#unless isRange}}v{{/unless}}{{newValue}}{{/if}}',
-          lazyGrouping: true,
           foo: 1,
           newValue: '5.1.2',
-          toVersion: '5.1.2',
+          newVersion: '5.1.2',
           group: {
             foo: 2,
           },
@@ -148,10 +175,9 @@ describe('workers/repository/updates/generate', () => {
           prTitle: 'some-title',
           commitMessageExtra:
             'to {{#if isMajor}}v{{newMajor}}{{else}}{{#unless isRange}}v{{/unless}}{{newValue}}{{/if}}',
-          lazyGrouping: true,
           foo: 1,
           newValue: '1.1.0',
-          toVersion: '1.1.0',
+          newVersion: '1.1.0',
           group: {
             foo: 2,
           },
@@ -174,7 +200,6 @@ describe('workers/repository/updates/generate', () => {
           prTitle: 'some-title',
           commitMessageExtra:
             'to {{#if isMajor}}v{{newMajor}}{{else}}{{#unless isRange}}v{{/unless}}{{newValue}}{{/if}}',
-          lazyGrouping: true,
           isDigest: true,
           currentDigest: 'abcdefghijklmnopqrstuvwxyz',
           newDigest: '123abcdefghijklmnopqrstuvwxyz',
@@ -190,7 +215,6 @@ describe('workers/repository/updates/generate', () => {
           prTitle: 'some-title',
           commitMessageExtra:
             'to {{#if isMajor}}v{{newMajor}}{{else}}{{#unless isRange}}v{{/unless}}{{newValue}}{{/if}}',
-          lazyGrouping: true,
           foo: 1,
           newValue: 'zzzzzzzzzz',
           group: {
@@ -213,10 +237,9 @@ describe('workers/repository/updates/generate', () => {
           prTitle: 'some-title',
           commitMessageExtra:
             'to {{#if isMajor}}v{{newMajor}}{{else}}{{#unless isRange}}v{{/unless}}{{newValue}}{{/if}}',
-          lazyGrouping: true,
           foo: 1,
           newValue: '>= 5.1.2',
-          toVersion: '5.1.2',
+          newVersion: '5.1.2',
           group: {
             foo: 2,
           },
@@ -229,10 +252,9 @@ describe('workers/repository/updates/generate', () => {
           prTitle: 'some-title',
           commitMessageExtra:
             'to {{#if isMajor}}v{{newMajor}}{{else}}{{#unless isRange}}v{{/unless}}{{newValue}}{{/if}}',
-          lazyGrouping: true,
           foo: 1,
           newValue: '^5,1,2',
-          toVersion: '5.1.2',
+          newVersion: '5.1.2',
           group: {
             foo: 2,
           },
@@ -248,13 +270,12 @@ describe('workers/repository/updates/generate', () => {
         partial<BranchUpgradeConfig>({
           ...defaultConfig,
           depName: 'some-dep',
-          semanticCommits: true,
+          semanticCommits: 'enabled',
           semanticCommitType: 'chore',
           semanticCommitScope: 'package',
-          lazyGrouping: true,
           newValue: '1.2.0',
           isSingleVersion: true,
-          toVersion: '1.2.0',
+          newVersion: '1.2.0',
           foo: 1,
           group: {
             foo: 2,
@@ -273,13 +294,12 @@ describe('workers/repository/updates/generate', () => {
           depName: 'some-dep',
           packageFile: 'package.json',
           baseDir: '',
-          semanticCommits: true,
+          semanticCommits: 'enabled',
           semanticCommitType: 'chore',
           semanticCommitScope: '{{baseDir}}',
-          lazyGrouping: true,
           newValue: '1.2.0',
           isSingleVersion: true,
-          toVersion: '1.2.0',
+          newVersion: '1.2.0',
           foo: 1,
           group: {
             foo: 2,
@@ -299,13 +319,12 @@ describe('workers/repository/updates/generate', () => {
           depName: 'some-dep',
           packageFile: 'foo/bar/package.json',
           parentDir: 'bar',
-          semanticCommits: true,
+          semanticCommits: 'enabled',
           semanticCommitType: 'chore',
           semanticCommitScope: '{{parentDir}}',
-          lazyGrouping: true,
           newValue: '1.2.0',
           isSingleVersion: true,
-          toVersion: '1.2.0',
+          newVersion: '1.2.0',
           foo: 1,
           group: {
             foo: 2,
@@ -323,14 +342,13 @@ describe('workers/repository/updates/generate', () => {
           ...defaultConfig,
           depName: 'some-dep',
           packageFile: 'foo/bar/package.json',
-          baseDir: 'foo/bar',
-          semanticCommits: true,
+          packageFileDir: 'foo/bar',
+          semanticCommits: 'enabled',
           semanticCommitType: 'chore',
-          semanticCommitScope: '{{baseDir}}',
-          lazyGrouping: true,
+          semanticCommitScope: '{{packageFileDir}}',
           newValue: '1.2.0',
           isSingleVersion: true,
-          toVersion: '1.2.0',
+          newVersion: '1.2.0',
           foo: 1,
           group: {
             foo: 2,
@@ -350,7 +368,7 @@ describe('workers/repository/updates/generate', () => {
           commitBody: '[skip-ci]',
           newValue: '1.2.0',
           isSingleVersion: true,
-          toVersion: '1.2.0',
+          newVersion: '1.2.0',
         }),
       ];
       const res = generateBranchConfig(branch);
@@ -378,10 +396,10 @@ describe('workers/repository/updates/generate', () => {
           groupName: null,
           branchName: 'some-branch',
           prTitle: 'some-title',
-          lazyGrouping: true,
           currentValue: '0.5.7',
-          fromVersion: '0.5.7',
-          toVersion: '0.5.8',
+          currentVersion: '0.5.7',
+          newValue: '0.5.8',
+          newVersion: '0.5.8',
           group: {},
         },
         {
@@ -391,14 +409,24 @@ describe('workers/repository/updates/generate', () => {
           groupName: null,
           branchName: 'some-branch',
           prTitle: 'some-title',
-          lazyGrouping: true,
           newValue: '0.6.0',
+          group: {},
+        },
+        {
+          commitBodyTable: true,
+          datasource: datasourceNpm.id,
+          depName: 'some-dep',
+          groupName: null,
+          branchName: 'some-branch',
+          prTitle: 'some-other-title',
+          newValue: '1.0.0',
           group: {},
         },
       ];
       const res = generateBranchConfig(branch);
       expect(res.recreateClosed).toBe(false);
       expect(res.groupName).toBeUndefined();
+      expect(generateBranchConfig(branch)).toMatchSnapshot();
     });
     it('handles @types specially (reversed)', () => {
       const branch: BranchUpgradeConfig[] = [
@@ -407,8 +435,19 @@ describe('workers/repository/updates/generate', () => {
           groupName: null,
           branchName: 'some-branch',
           prTitle: 'some-title',
-          lazyGrouping: true,
           newValue: '0.6.0',
+          labels: ['a', 'c'],
+          group: {},
+        },
+        {
+          commitBodyTable: true,
+          datasource: datasourceNpm.id,
+          depName: 'some-dep',
+          groupName: null,
+          branchName: 'some-branch',
+          prTitle: 'some-other-title',
+          newValue: '1.0.0',
+          labels: ['a', 'b'],
           group: {},
         },
         {
@@ -416,8 +455,8 @@ describe('workers/repository/updates/generate', () => {
           groupName: null,
           branchName: 'some-branch',
           prTitle: 'some-title',
-          lazyGrouping: true,
           newValue: '0.5.7',
+          labels: ['a'],
           group: {},
         },
       ];
@@ -469,6 +508,42 @@ describe('workers/repository/updates/generate', () => {
       ];
       const res = generateBranchConfig(branch);
       expect(res.prTitle).toMatchSnapshot();
+    });
+    it('sorts upgrades, without position first', () => {
+      const branch: BranchUpgradeConfig[] = [
+        {
+          depName: 'some-dep1',
+          branchName: 'some-branch',
+          prTitle: 'some-title',
+          newValue: '0.6.0',
+          fileReplacePosition: 1,
+        },
+        {
+          depName: 'some-dep2',
+          branchName: 'some-branch',
+          prTitle: 'some-title',
+          newValue: '0.6.0',
+          fileReplacePosition: undefined,
+        },
+        {
+          depName: 'some-dep3',
+          branchName: 'some-branch',
+          prTitle: 'some-title',
+          newValue: '0.6.0',
+          fileReplacePosition: 4,
+        },
+        {
+          depName: 'some-dep4',
+          branchName: 'some-branch',
+          prTitle: 'some-title',
+          newValue: '0.6.0',
+          fileReplacePosition: undefined,
+        },
+      ];
+      const res = generateBranchConfig(branch);
+      expect(
+        res.upgrades.map((upgrade) => upgrade.fileReplacePosition)
+      ).toStrictEqual([undefined, undefined, 4, 1]);
     });
   });
 });

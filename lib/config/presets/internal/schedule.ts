@@ -1,4 +1,4 @@
-import { Preset } from '../common';
+import type { Preset } from '../types';
 
 export const presets: Record<string, Preset> = {
   earlyMondays: {
@@ -16,6 +16,14 @@ export const presets: Record<string, Preset> = {
   monthly: {
     description: 'Schedule monthly',
     schedule: ['before 3am on the first day of the month'],
+  },
+  quarterly: {
+    description: 'Schedule quarterly',
+    schedule: ['every 3 months on the first day of the month'],
+  },
+  yearly: {
+    description: 'Schedule once a year (not recommended)',
+    schedule: ['every 12 months on the first day of the month'],
   },
   weekends: {
     description: 'Schedule for weekends',

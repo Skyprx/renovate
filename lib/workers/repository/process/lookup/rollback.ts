@@ -1,17 +1,12 @@
+import type { Release } from '../../../../datasource/types';
 import { logger } from '../../../../logger';
-import { LookupUpdate } from '../../../../manager/common';
+import type { LookupUpdate } from '../../../../manager/types';
 import * as allVersioning from '../../../../versioning';
-
-export interface RollbackConfig {
-  currentValue?: string;
-  depName?: string;
-  packageFile?: string;
-  versioning: string;
-}
+import type { RollbackConfig } from './types';
 
 export function getRollbackUpdate(
   config: RollbackConfig,
-  versions: string[]
+  versions: Release[]
 ): LookupUpdate {
   const { packageFile, versioning, depName, currentValue } = config;
   const version = allVersioning.get(versioning);
@@ -24,7 +19,7 @@ export function getRollbackUpdate(
     return null;
   }
   const lessThanVersions = versions.filter((v) =>
-    version.isLessThanRange(v, currentValue)
+    version.isLessThanRange(v.version, currentValue)
   );
   // istanbul ignore if
   if (!lessThanVersions.length) {
@@ -42,26 +37,23 @@ export function getRollbackUpdate(
     { dependency: depName, versions },
     'Versions found before rolling back'
   );
-  lessThanVersions.sort((a, b) => version.sortVersions(a, b));
-  const toVersion = lessThanVersions.pop();
+  lessThanVersions.sort((a, b) => version.sortVersions(a.version, b.version));
+  const newVersion = lessThanVersions.pop()?.version;
   // istanbul ignore if
-  if (!toVersion) {
-    logger.debug('No toVersion to roll back to');
+  if (!newVersion) {
+    logger.debug('No newVersion to roll back to');
     return null;
   }
   const newValue = version.getNewValue({
     currentValue,
     rangeStrategy: 'replace',
-    toVersion,
+    newVersion,
   });
   return {
-    updateType: 'rollback',
-    branchName:
-      '{{{branchPrefix}}}rollback-{{{depNameSanitized}}}-{{{newMajor}}}.x',
-    commitMessageAction: 'Roll back',
-    isRollback: true,
+    bucket: 'rollback',
+    newMajor: version.getMajor(newVersion),
     newValue,
-    newMajor: version.getMajor(toVersion),
-    semanticCommitType: 'fix',
+    newVersion,
+    updateType: 'rollback',
   };
 }

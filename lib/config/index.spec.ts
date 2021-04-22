@@ -1,3 +1,6 @@
+import upath from 'upath';
+import { getName } from '../../test/util';
+import { readFile } from '../util/fs';
 import getArgv from './config/__fixtures__/argv';
 import { getConfig } from './defaults';
 
@@ -10,7 +13,7 @@ try {
 
 const defaultConfig = getConfig();
 
-describe('config/index', () => {
+describe(getName(__filename), () => {
   describe('.parseConfigs(env, defaultArgv)', () => {
     let configParser: typeof import('.');
     let defaultArgv: string[];
@@ -40,9 +43,8 @@ describe('config/index', () => {
       );
       expect(parsedConfig).toContainEntries([
         ['token', 'abc'],
-        ['global', { prFooter: 'custom' }],
+        ['prFooter', 'custom'],
         ['logContext', 'abc123'],
-        ['customPrFooter', true],
       ]);
     });
 
@@ -58,6 +60,40 @@ describe('config/index', () => {
         ['force', null],
       ]);
       expect(parsedConfig).not.toContainKey('configFile');
+    });
+    it('supports config.force', async () => {
+      const configPath = upath.join(
+        __dirname,
+        'config/__fixtures__/with-force.js'
+      );
+      const env: NodeJS.ProcessEnv = {
+        ...defaultEnv,
+        RENOVATE_CONFIG_FILE: configPath,
+      };
+      const parsedConfig = await configParser.parseConfigs(env, defaultArgv);
+      expect(parsedConfig).toContainEntries([
+        ['token', 'abcdefg'],
+        [
+          'force',
+          {
+            schedule: null,
+          },
+        ],
+      ]);
+    });
+    it('reads private key from file', async () => {
+      const privateKeyPath = upath.join(
+        __dirname,
+        'keys/__fixtures__/private.pem'
+      );
+      const env: NodeJS.ProcessEnv = {
+        ...defaultEnv,
+        RENOVATE_PRIVATE_KEY_PATH: privateKeyPath,
+      };
+      const expected = await readFile(privateKeyPath);
+      const parsedConfig = await configParser.parseConfigs(env, defaultArgv);
+
+      expect(parsedConfig).toContainEntries([['privateKey', expected]]);
     });
     it('supports Bitbucket username/passwod', async () => {
       defaultArgv = defaultArgv.concat([
@@ -116,6 +152,24 @@ describe('config/index', () => {
         3,
         4,
       ]);
+    });
+    it('merges constraints', async () => {
+      const parentConfig = { ...defaultConfig };
+      Object.assign(parentConfig, {
+        constraints: {
+          node: '>=12',
+          npm: '^6.0.0',
+        },
+      });
+      const childConfig = {
+        constraints: {
+          node: '<15',
+        },
+      };
+      const configParser = await import('./index');
+      const config = configParser.mergeChildConfig(parentConfig, childConfig);
+      expect(config.constraints).toMatchSnapshot();
+      expect(config.constraints.node).toEqual('<15');
     });
     it('handles null parent packageRules', async () => {
       const parentConfig = { ...defaultConfig };

@@ -1,6 +1,7 @@
-import { RenovateConfig } from '../../../config';
+import { getAdminConfig } from '../../../config/admin';
+import type { RenovateConfig } from '../../../config/types';
 import { logger } from '../../../logger';
-import { PackageFile } from '../../../manager/common';
+import type { PackageFile } from '../../../manager/types';
 import { platform } from '../../../platform';
 
 export async function raiseDeprecationWarnings(
@@ -10,10 +11,7 @@ export async function raiseDeprecationWarnings(
   if (!config.repoIsOnboarded) {
     return;
   }
-  if (
-    config.suppressNotifications &&
-    config.suppressNotifications.includes('deprecationWarningIssues')
-  ) {
+  if (config.suppressNotifications?.includes('deprecationWarningIssues')) {
     return;
   }
   for (const [manager, files] of Object.entries(packageFiles)) {
@@ -57,7 +55,7 @@ export async function raiseDeprecationWarnings(
         .join(', ')}`;
       issueBody += `\n\nIf you don't care about this, you can close this issue and not be warned about \`${depName}\`'s deprecation again. If you would like to completely disable all future deprecation warnings then add the following to your config:\n\n\`\`\`\n"suppressNotifications": ["deprecationWarningIssues"]\n\`\`\`\n\n`;
       // istanbul ignore if
-      if (config.dryRun) {
+      if (getAdminConfig().dryRun) {
         logger.info('DRY-RUN: Ensure deprecation warning issue for ' + depName);
       } else {
         const ensureOnce = true;
@@ -72,7 +70,7 @@ export async function raiseDeprecationWarnings(
       'Checking for existing deprecated package issues missing in current deprecatedPackages'
     );
     const issueList = await platform.getIssueList();
-    if (issueList && issueList.length) {
+    if (issueList?.length) {
       const deprecatedIssues = issueList.filter(
         (i) => i.title.startsWith(issueTitlePrefix) && i.state === 'open'
       );

@@ -3,16 +3,13 @@ import yaml from 'js-yaml';
 import * as datasourceGitlabTags from '../../datasource/gitlab-tags';
 import { logger } from '../../logger';
 import { SkipReason } from '../../types';
-import { ExtractConfig, PackageDependency, PackageFile } from '../common';
+import type { ExtractConfig, PackageDependency, PackageFile } from '../types';
 
-function extractDepFromInclude(includeObj: {
+function extractDepFromIncludeFile(includeObj: {
   file: any;
   project: string;
   ref: string;
-}): PackageDependency | null {
-  if (!includeObj.file || !includeObj.project) {
-    return null;
-  }
+}): PackageDependency {
   const dep: PackageDependency = {
     datasource: datasourceGitlabTags.id,
     depName: includeObj.project,
@@ -33,11 +30,12 @@ export function extractPackageFile(
 ): PackageFile | null {
   const deps: PackageDependency[] = [];
   try {
-    const doc = yaml.safeLoad(content, { json: true });
+    // TODO: fix me
+    const doc = yaml.safeLoad(content, { json: true }) as any;
     if (doc?.include && is.array(doc.include)) {
       for (const includeObj of doc.include) {
-        const dep = extractDepFromInclude(includeObj);
-        if (dep) {
+        if (includeObj.file && includeObj.project) {
+          const dep = extractDepFromIncludeFile(includeObj);
           if (config.endpoint) {
             dep.registryUrls = [config.endpoint.replace(/\/api\/v4\/?/, '')];
           }
@@ -46,14 +44,13 @@ export function extractPackageFile(
       }
     }
   } catch (err) /* istanbul ignore next */ {
-    if (err.stack && err.stack.startsWith('YAMLException:')) {
+    if (err.stack?.startsWith('YAMLException:')) {
       logger.debug({ err });
       logger.debug('YAML exception extracting GitLab CI includes');
     } else {
       logger.warn({ err }, 'Error extracting GitLab CI includes');
     }
   }
-
   if (!deps.length) {
     return null;
   }

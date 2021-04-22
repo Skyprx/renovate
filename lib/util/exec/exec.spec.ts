@@ -1,8 +1,13 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 import {
   ExecOptions as ChildProcessExecOptions,
   exec as _cpExec,
 } from 'child_process';
-import { envMock } from '../../../test/execUtil';
+import { envMock } from '../../../test/exec-util';
+import { getName } from '../../../test/util';
+import { setAdminConfig } from '../../config/admin';
+import type { RepoAdminConfig } from '../../config/types';
+import { TEMPORARY_ERROR } from '../../constants/error-messages';
 import {
   BinarySource,
   ExecConfig,
@@ -23,12 +28,11 @@ interface TestInput {
   inOpts: ExecOptions;
   outCmd: string[];
   outOpts: RawExecOptions[];
-  trustLevel?: 'high' | 'low';
+  adminConfig?: RepoAdminConfig;
 }
 
-describe(`Child process execution wrapper`, () => {
-  let processEnvOrig;
-  let trustLevelOrig;
+describe(getName(__filename), () => {
+  let processEnvOrig: NodeJS.ProcessEnv;
 
   const cacheDir = '/tmp/renovate/cache/';
   const cwd = '/tmp/renovate/github/some/repo/';
@@ -47,16 +51,17 @@ describe(`Child process execution wrapper`, () => {
     jest.restoreAllMocks();
     jest.resetModules();
     processEnvOrig = process.env;
-    trustLevelOrig = global.trustLevel;
+    setAdminConfig();
   });
 
   afterEach(() => {
     process.env = processEnvOrig;
-    global.trustLevel = trustLevelOrig;
+    setAdminConfig();
   });
 
-  const image = 'example/image';
-  const name = image.replace(/\//g, '_');
+  const image = 'image';
+  const fullImage = `renovate/${image}`;
+  const name = `renovate_${image}`;
   const tag = '1.2.3';
   const inCmd = 'echo hello';
   const outCmd = ['echo hello'];
@@ -72,7 +77,7 @@ describe(`Child process execution wrapper`, () => {
   const encoding = 'utf-8';
   const docker = { image };
   const processEnv = envMock.full;
-  const dockerPullCmd = `docker pull ${image}`;
+  const dockerPullCmd = `docker pull ${fullImage}`;
   const dockerRemoveCmd = `docker ps --filter name=${name} -aq`;
   const dockerPullOpts = { encoding };
   const dockerRemoveOpts = dockerPullOpts;
@@ -86,7 +91,15 @@ describe(`Child process execution wrapper`, () => {
         inCmd,
         inOpts: {},
         outCmd,
-        outOpts: [{ cwd, encoding, env: envMock.basic, timeout: 900000 }],
+        outOpts: [
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
+        ],
       },
     ],
 
@@ -99,9 +112,27 @@ describe(`Child process execution wrapper`, () => {
         inOpts: {},
         outCmd: ['echo "begin"', ...outCmd, "echo 'end'"],
         outOpts: [
-          { cwd, encoding, env: envMock.basic, timeout: 900000 },
-          { cwd, encoding, env: envMock.basic, timeout: 900000 },
-          { cwd, encoding, env: envMock.basic, timeout: 900000 },
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
         ],
       },
     ],
@@ -120,6 +151,7 @@ describe(`Child process execution wrapper`, () => {
             encoding,
             env: { ...envMock.basic, FOO: 'BAR' },
             timeout: 900000,
+            maxBuffer: 10485760,
           },
         ],
       },
@@ -133,7 +165,15 @@ describe(`Child process execution wrapper`, () => {
         inCmd,
         inOpts: {},
         outCmd,
-        outOpts: [{ cwd, encoding, env: envMock.basic, timeout: 900000 }],
+        outOpts: [
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
+        ],
       },
     ],
 
@@ -145,8 +185,16 @@ describe(`Child process execution wrapper`, () => {
         inCmd,
         inOpts: {},
         outCmd,
-        outOpts: [{ cwd, encoding, env: envMock.full, timeout: 900000 }],
-        trustLevel: 'high',
+        outOpts: [
+          {
+            cwd,
+            encoding,
+            env: envMock.full,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
+        ],
+        adminConfig: { exposeAllEnv: true },
       },
     ],
 
@@ -160,12 +208,18 @@ describe(`Child process execution wrapper`, () => {
         outCmd: [
           dockerPullCmd,
           dockerRemoveCmd,
-          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} ${defaultCwd} ${image} bash -l -c "${inCmd}"`,
+          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} ${defaultCwd} ${fullImage} bash -l -c "${inCmd}"`,
         ],
         outOpts: [
           dockerPullOpts,
           dockerRemoveOpts,
-          { cwd, encoding, env: envMock.basic, timeout: 900000 },
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
         ],
       },
     ],
@@ -185,7 +239,15 @@ describe(`Child process execution wrapper`, () => {
           },
         },
         outCmd,
-        outOpts: [{ cwd, encoding, env: envMock.filtered, timeout: 900000 }],
+        outOpts: [
+          {
+            cwd,
+            encoding,
+            env: envMock.filtered,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
+        ],
       },
     ],
 
@@ -208,12 +270,18 @@ describe(`Child process execution wrapper`, () => {
         outCmd: [
           dockerPullCmd,
           dockerRemoveCmd,
-          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -e SELECTED_ENV_VAR ${defaultCwd} ${image} bash -l -c "${inCmd}"`,
+          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -e SELECTED_ENV_VAR ${defaultCwd} ${fullImage} bash -l -c "${inCmd}"`,
         ],
         outOpts: [
           dockerPullOpts,
           dockerRemoveOpts,
-          { cwd, encoding, env: envMock.filtered, timeout: 900000 },
+          {
+            cwd,
+            encoding,
+            env: envMock.filtered,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
         ],
       },
     ],
@@ -232,6 +300,7 @@ describe(`Child process execution wrapper`, () => {
             encoding,
             env: { ...envMock.basic, SELECTED_ENV_VAR: 'Default value' },
             timeout: 900000,
+            maxBuffer: 10485760,
           },
         ],
       },
@@ -251,7 +320,7 @@ describe(`Child process execution wrapper`, () => {
         outCmd: [
           dockerPullCmd,
           dockerRemoveCmd,
-          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -e SELECTED_ENV_VAR ${defaultCwd} ${image} bash -l -c "${inCmd}"`,
+          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -e SELECTED_ENV_VAR ${defaultCwd} ${fullImage} bash -l -c "${inCmd}"`,
         ],
         outOpts: [
           dockerPullOpts,
@@ -261,6 +330,7 @@ describe(`Child process execution wrapper`, () => {
             encoding,
             env: { ...envMock.basic, SELECTED_ENV_VAR: 'Default value' },
             timeout: 900000,
+            maxBuffer: 10485760,
           },
         ],
       },
@@ -276,12 +346,18 @@ describe(`Child process execution wrapper`, () => {
         outCmd: [
           `${dockerPullCmd}:${tag}`,
           dockerRemoveCmd,
-          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} ${defaultCwd} ${image}:${tag} bash -l -c "${inCmd}"`,
+          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} ${defaultCwd} ${fullImage}:${tag} bash -l -c "${inCmd}"`,
         ],
         outOpts: [
           dockerPullOpts,
           dockerRemoveOpts,
-          { cwd, encoding, env: envMock.basic, timeout: 900000 },
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
         ],
       },
     ],
@@ -296,12 +372,18 @@ describe(`Child process execution wrapper`, () => {
         outCmd: [
           dockerPullCmd,
           dockerRemoveCmd,
-          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -v "${volume_1}":"${volume_1}" -v "${volume_2_from}":"${volume_2_to}" -w "${cwd}" ${image} bash -l -c "${inCmd}"`,
+          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -v "${volume_1}":"${volume_1}" -v "${volume_2_from}":"${volume_2_to}" -w "${cwd}" ${fullImage} bash -l -c "${inCmd}"`,
         ],
         outOpts: [
           dockerPullOpts,
           dockerRemoveOpts,
-          { cwd, encoding, env: envMock.basic, timeout: 900000 },
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
         ],
       },
     ],
@@ -312,7 +394,6 @@ describe(`Child process execution wrapper`, () => {
         execConfig: {
           ...execConfig,
           binarySource: BinarySource.Docker,
-          dockerUser: 'foobar',
         },
         processEnv,
         inCmd,
@@ -320,13 +401,80 @@ describe(`Child process execution wrapper`, () => {
         outCmd: [
           dockerPullCmd,
           dockerRemoveCmd,
-          `docker run --rm --name=${name} --label=renovate_child --user=foobar ${defaultVolumes} -w "${cwd}" ${image} bash -l -c "${inCmd}"`,
+          `docker run --rm --name=${name} --label=renovate_child --user=foobar ${defaultVolumes} -w "${cwd}" ${fullImage} bash -l -c "${inCmd}"`,
         ],
         outOpts: [
           dockerPullOpts,
           dockerRemoveOpts,
-          { cwd, encoding, env: envMock.basic, timeout: 900000 },
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
         ],
+        adminConfig: { dockerUser: 'foobar' },
+      },
+    ],
+
+    [
+      'Docker image prefix',
+      {
+        execConfig: {
+          ...execConfig,
+          binarySource: BinarySource.Docker,
+        },
+        processEnv,
+        inCmd,
+        inOpts: { docker },
+        outCmd: [
+          `docker pull ghcr.io/renovatebot/image`,
+          dockerRemoveCmd,
+          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -w "${cwd}" ghcr.io/renovatebot/image bash -l -c "${inCmd}"`,
+        ],
+        outOpts: [
+          dockerPullOpts,
+          dockerRemoveOpts,
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
+        ],
+        adminConfig: { dockerImagePrefix: 'ghcr.io/renovatebot' },
+      },
+    ],
+
+    [
+      'Docker child prefix',
+      {
+        execConfig: {
+          ...execConfig,
+          binarySource: BinarySource.Docker,
+        },
+        processEnv,
+        inCmd,
+        inOpts: { docker },
+        outCmd: [
+          dockerPullCmd,
+          `docker ps --filter name=myprefix_${image} -aq`,
+          `docker run --rm --name=myprefix_${image} --label=myprefix_child ${defaultVolumes} -w "${cwd}" ${fullImage} bash -l -c "${inCmd}"`,
+        ],
+        outOpts: [
+          dockerPullOpts,
+          dockerRemoveOpts,
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
+        ],
+        adminConfig: { dockerChildPrefix: 'myprefix_' },
       },
     ],
 
@@ -349,12 +497,18 @@ describe(`Child process execution wrapper`, () => {
         outCmd: [
           dockerPullCmd,
           dockerRemoveCmd,
-          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -w "${cwd}" ${image} bash -l -c "preCommand1 && preCommand2 && ${inCmd} && postCommand1 && postCommand2"`,
+          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -w "${cwd}" ${fullImage} bash -l -c "preCommand1 && preCommand2 && ${inCmd} && postCommand1 && postCommand2"`,
         ],
         outOpts: [
           dockerPullOpts,
           dockerRemoveOpts,
-          { cwd, encoding, env: envMock.basic, timeout: 900000 },
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
         ],
       },
     ],
@@ -378,13 +532,163 @@ describe(`Child process execution wrapper`, () => {
         outCmd: [
           dockerPullCmd,
           dockerRemoveCmd,
-          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -w "${cwd}" ${image} bash -l -c "${inCmd}"`,
+          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -w "${cwd}" ${fullImage} bash -l -c "${inCmd}"`,
         ],
         outOpts: [
           dockerPullOpts,
           dockerRemoveOpts,
-          { cwd, encoding, env: envMock.basic, timeout: 900000 },
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
         ],
+      },
+    ],
+
+    [
+      'Explicit maxBuffer',
+      {
+        execConfig,
+        processEnv,
+        inCmd,
+        inOpts: {
+          maxBuffer: 1024,
+        },
+        outCmd,
+        outOpts: [
+          {
+            cwd,
+            encoding,
+            env: envMock.basic,
+            timeout: 900000,
+            maxBuffer: 1024,
+          },
+        ],
+      },
+    ],
+
+    [
+      'Custom environment variables for child',
+      {
+        execConfig: {
+          ...execConfig,
+        },
+        processEnv: envMock.basic,
+        inCmd,
+        inOpts: {},
+        outCmd,
+        outOpts: [
+          {
+            cwd,
+            encoding,
+            env: { ...envMock.basic, CUSTOM_KEY: 'CUSTOM_VALUE' },
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
+        ],
+        adminConfig: {
+          customEnvVariables: {
+            CUSTOM_KEY: 'CUSTOM_VALUE',
+          },
+        },
+      },
+    ],
+
+    [
+      'Custom environment variables for child should override',
+      {
+        execConfig: {
+          ...execConfig,
+        },
+        processEnv: { ...envMock.basic, CUSTOM_KEY: 'CUSTOM_VALUE' },
+        inCmd,
+        inOpts: {},
+        outCmd,
+        outOpts: [
+          {
+            cwd,
+            encoding,
+            env: { ...envMock.basic, CUSTOM_KEY: 'CUSTOM_OVERRIDEN_VALUE' },
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
+        ],
+        adminConfig: {
+          customEnvVariables: {
+            CUSTOM_KEY: 'CUSTOM_OVERRIDEN_VALUE',
+          },
+        },
+      },
+    ],
+
+    [
+      'Custom environment variables for child (Docker)',
+      {
+        execConfig: {
+          ...execConfig,
+          binarySource: BinarySource.Docker,
+        },
+        processEnv,
+        inCmd,
+        inOpts: { docker, cwd },
+        outCmd: [
+          dockerPullCmd,
+          dockerRemoveCmd,
+          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -e CUSTOM_KEY ${defaultCwd} ${fullImage} bash -l -c "${inCmd}"`,
+        ],
+        outOpts: [
+          dockerPullOpts,
+          dockerRemoveOpts,
+          {
+            cwd,
+            encoding,
+            env: { ...envMock.basic, CUSTOM_KEY: 'CUSTOM_VALUE' },
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
+        ],
+        adminConfig: {
+          customEnvVariables: {
+            CUSTOM_KEY: 'CUSTOM_VALUE',
+          },
+        },
+      },
+    ],
+
+    [
+      'Custom environment variables for child should override (Docker)',
+      {
+        execConfig: {
+          ...execConfig,
+          binarySource: BinarySource.Docker,
+        },
+        processEnv: { ...envMock.basic, CUSTOM_KEY: 'CUSTOM_VALUE' },
+        inCmd,
+        inOpts: { docker, cwd },
+        outCmd: [
+          dockerPullCmd,
+          dockerRemoveCmd,
+          `docker run --rm --name=${name} --label=renovate_child ${defaultVolumes} -e CUSTOM_KEY ${defaultCwd} ${fullImage} bash -l -c "${inCmd}"`,
+        ],
+        outOpts: [
+          dockerPullOpts,
+          dockerRemoveOpts,
+          {
+            cwd,
+            encoding,
+            env: { ...envMock.basic, CUSTOM_KEY: 'CUSTOM_OVERRIDEN_VALUE' },
+            timeout: 900000,
+            maxBuffer: 10485760,
+          },
+        ],
+        adminConfig: {
+          customEnvVariables: {
+            CUSTOM_KEY: 'CUSTOM_OVERRIDEN_VALUE',
+          },
+        },
       },
     ],
   ];
@@ -397,13 +701,10 @@ describe(`Child process execution wrapper`, () => {
       inOpts,
       outCmd: outCommand,
       outOpts,
-      trustLevel,
+      adminConfig = {} as any,
     } = testOpts;
 
     process.env = procEnv;
-    if (trustLevel) {
-      global.trustLevel = trustLevel;
-    }
 
     if (config) {
       jest
@@ -420,7 +721,7 @@ describe(`Child process execution wrapper`, () => {
       callback(null, { stdout: '', stderr: '' });
       return undefined;
     });
-
+    setAdminConfig(adminConfig);
     await exec(cmd as string, inOpts);
 
     expect(actualCmd).toEqual(outCommand);
@@ -506,5 +807,22 @@ describe(`Child process execution wrapper`, () => {
       )
     );
     expect(removeDockerContainerSpy).toHaveBeenCalledTimes(2);
+  });
+  it('converts to TEMPORARY_ERROR', async () => {
+    cpExec.mockImplementation(() => {
+      class ErrorSignal extends Error {
+        signal?: string;
+      }
+      const error = new ErrorSignal();
+      error.signal = 'SIGTERM';
+      throw error;
+    });
+    const removeDockerContainerSpy = jest.spyOn(
+      dockerModule,
+      'removeDockerContainer'
+    );
+    const promise = exec('foobar', {});
+    await expect(promise).rejects.toThrow(TEMPORARY_ERROR);
+    expect(removeDockerContainerSpy).toHaveBeenCalledTimes(0);
   });
 });

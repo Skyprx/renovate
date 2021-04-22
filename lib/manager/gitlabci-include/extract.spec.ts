@@ -1,12 +1,13 @@
 import fs from 'fs';
+import { getName } from '../../../test/util';
 import { extractPackageFile } from './extract';
 
 const yamlFile = fs.readFileSync(
-  'lib/manager/gitlabci-include/__fixtures__/gitlab-ci.yaml',
+  'lib/manager/gitlabci-include/__fixtures__/gitlab-ci.1.yaml',
   'utf8'
 );
 
-describe('lib/manager/gitlabci-include/extract', () => {
+describe(getName(__filename), () => {
   describe('extractPackageFile()', () => {
     it('returns null for empty', () => {
       expect(
@@ -23,12 +24,13 @@ describe('lib/manager/gitlabci-include/extract', () => {
         'http://gitlab.test/api/v4',
         'http://gitlab.test/api/v4/',
       ];
-      endpoints.forEach((endpoint) => {
+
+      for (const endpoint of endpoints) {
         const res = extractPackageFile(yamlFile, '.gitlab-ci.yml', {
           endpoint,
         });
         expect(res.deps[0].registryUrls[0]).toEqual('http://gitlab.test');
-      });
+      }
     });
   });
 });

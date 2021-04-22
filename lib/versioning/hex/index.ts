@@ -1,5 +1,5 @@
-import { NewValueConfig, VersioningApi } from '../common';
 import { api as npm } from '../npm';
+import type { NewValueConfig, VersioningApi } from '../types';
 
 export const id = 'hex';
 export const displayName = 'Hex';
@@ -13,7 +13,8 @@ function hex2npm(input: string): string {
     .replace(/~>\s*(\d+\.\d+\.\d+)/, '~$1')
     .replace(/==|and/, '')
     .replace('or', '||')
-    .replace(/!=\s*(\d+\.\d+(\.\d+.*)?)/, '>$1 <$1');
+    .replace(/!=\s*(\d+\.\d+(\.\d+.*)?)/, '>$1 <$1')
+    .trim();
 }
 
 function npm2hex(input: string): string {
@@ -31,10 +32,10 @@ function npm2hex(input: string): string {
     if (i < res.length - 1 && res[i + 1].includes('||')) {
       output += res[i] + ' or ';
       i += 1;
-    } else if (!operators.includes(res[i])) {
-      output += res[i] + ' and ';
-    } else {
+    } else if (operators.includes(res[i])) {
       output += res[i] + ' ';
+    } else {
+      output += res[i] + ' and ';
     }
   }
   return output;
@@ -49,8 +50,8 @@ const isValid = (input: string): string | boolean =>
 const matches = (version: string, range: string): boolean =>
   npm.matches(hex2npm(version), hex2npm(range));
 
-const maxSatisfyingVersion = (versions: string[], range: string): string =>
-  npm.maxSatisfyingVersion(versions.map(hex2npm), hex2npm(range));
+const getSatisfyingVersion = (versions: string[], range: string): string =>
+  npm.getSatisfyingVersion(versions.map(hex2npm), hex2npm(range));
 
 const minSatisfyingVersion = (versions: string[], range: string): string =>
   npm.minSatisfyingVersion(versions.map(hex2npm), hex2npm(range));
@@ -58,25 +59,32 @@ const minSatisfyingVersion = (versions: string[], range: string): string =>
 const getNewValue = ({
   currentValue,
   rangeStrategy,
-  fromVersion,
-  toVersion,
+  currentVersion,
+  newVersion,
 }: NewValueConfig): string => {
   let newSemver = npm.getNewValue({
     currentValue: hex2npm(currentValue),
     rangeStrategy,
-    fromVersion,
-    toVersion,
+    currentVersion,
+    newVersion,
   });
   newSemver = npm2hex(newSemver);
-  if (/~>\s*(\d+\.\d+)$/.test(currentValue)) {
+  if (/~>\s*(\d+\.\d+\.\d+)$/.test(currentValue)) {
     newSemver = newSemver.replace(
-      /\^\s*(\d+\.\d+(\.\d)?)/,
-      (_str, p1) => '~> ' + p1.slice(0, -2)
+      /[\^~]\s*(\d+\.\d+\.\d+)/,
+      (_str, p1: string) => `~> ${p1}`
+    );
+  } else if (/~>\s*(\d+\.\d+)$/.test(currentValue)) {
+    newSemver = newSemver.replace(
+      /\^\s*(\d+\.\d+)(\.\d+)?/,
+      (_str, p1: string) => `~> ${p1}`
     );
   } else {
     newSemver = newSemver.replace(/~\s*(\d+\.\d+\.\d)/, '~> $1');
   }
-
+  if (npm.isVersion(newSemver)) {
+    newSemver = `== ${newSemver}`;
+  }
   return newSemver;
 };
 
@@ -87,7 +95,7 @@ export const api: VersioningApi = {
   isLessThanRange,
   isValid,
   matches,
-  maxSatisfyingVersion,
+  getSatisfyingVersion,
   minSatisfyingVersion,
   getNewValue,
 };

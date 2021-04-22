@@ -1,6 +1,8 @@
-import { ExecOptions as ChildProcessExecOptions } from 'child_process';
-import { dirname, join } from 'path';
-import { RenovateConfig } from '../../config/common';
+import type { ExecOptions as ChildProcessExecOptions } from 'child_process';
+import { dirname, join } from 'upath';
+import { getAdminConfig } from '../../config/admin';
+import type { RenovateConfig } from '../../config/types';
+import { TEMPORARY_ERROR } from '../../constants/error-messages';
 import { logger } from '../../logger';
 import {
   BinarySource,
@@ -20,7 +22,6 @@ import { getChildProcessEnv } from './env';
 
 const execConfig: ExecConfig = {
   binarySource: null,
-  dockerUser: null,
   localDir: null,
   cacheDir: null,
 };
@@ -33,7 +34,7 @@ export async function setExecConfig(
     execConfig[key] = value || null;
   }
   if (execConfig.binarySource === 'docker') {
-    await removeDanglingContainers();
+    await removeDanglingContainers(getAdminConfig().dockerChildPrefix);
   }
 }
 
@@ -60,14 +61,11 @@ function createChildEnv(
   });
   const extraEnvKeys = Object.keys(extraEnvEntries);
 
-  const childEnv =
-    env || extraEnv
-      ? {
-          ...extraEnv,
-          ...getChildProcessEnv(extraEnvKeys),
-          ...env,
-        }
-      : getChildProcessEnv();
+  const childEnv = {
+    ...extraEnv,
+    ...getChildProcessEnv(extraEnvKeys),
+    ...env,
+  };
 
   const result: ExtraEnv<string> = {};
   Object.entries(childEnv).forEach(([key, val]) => {
@@ -96,7 +94,9 @@ export async function exec(
   cmd: string | string[],
   opts: ExecOptions = {}
 ): Promise<ExecResult> {
-  const { env, extraEnv, docker, cwdFile } = opts;
+  const { env, docker, cwdFile } = opts;
+  const { dockerChildPrefix, customEnvVariables } = getAdminConfig();
+  const extraEnv = { ...opts.extraEnv, ...customEnvVariables };
   let cwd;
   // istanbul ignore if
   if (cwdFile) {
@@ -118,6 +118,8 @@ export async function exec(
   };
   // Set default timeout to 15 minutes
   rawExecOptions.timeout = rawExecOptions.timeout || 15 * 60 * 1000;
+  // Set default max buffer size to 10MB
+  rawExecOptions.maxBuffer = rawExecOptions.maxBuffer || 10 * 1024 * 1024;
 
   let commands = typeof cmd === 'string' ? [cmd] : cmd;
   const useDocker = execConfig.binarySource === BinarySource.Docker && docker;
@@ -140,15 +142,8 @@ export async function exec(
   let res: ExecResult | null = null;
   for (const rawExecCommand of commands) {
     const startTime = Date.now();
-    let timer;
-    const { timeout } = rawExecOptions;
     if (useDocker) {
-      await removeDockerContainer(docker.image);
-      // istanbul ignore next
-      timer = setTimeout(() => {
-        removeDockerContainer(docker.image); // eslint-disable-line
-        logger.info({ timeout, rawExecCommand }, 'Docker run timed out');
-      }, timeout);
+      await removeDockerContainer(docker.image, dockerChildPrefix);
     }
     logger.debug({ command: rawExecCommand }, 'Executing command');
     logger.trace({ commandOptions: rawExecOptions }, 'Command options');
@@ -156,17 +151,25 @@ export async function exec(
       res = await rawExec(rawExecCommand, rawExecOptions);
     } catch (err) {
       logger.trace({ err }, 'rawExec err');
-      clearTimeout(timer);
       if (useDocker) {
-        await removeDockerContainer(docker.image).catch((removeErr) => {
-          throw new Error(
-            `Error: "${removeErr.message}" - Original Error: "${err.message}"`
-          );
-        });
+        await removeDockerContainer(docker.image, dockerChildPrefix).catch(
+          (removeErr: Error) => {
+            const message: string = err.message;
+            throw new Error(
+              `Error: "${removeErr.message}" - Original Error: "${message}"`
+            );
+          }
+        );
+      }
+      if (err.signal === `SIGTERM`) {
+        logger.debug(
+          { err },
+          'exec interrupted by SIGTERM - run needs to be aborted'
+        );
+        throw new Error(TEMPORARY_ERROR);
       }
       throw err;
     }
-    clearTimeout(timer);
     const durationMs = Math.round(Date.now() - startTime);
     if (res) {
       logger.debug(

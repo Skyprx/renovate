@@ -2,7 +2,7 @@ import { fromStream } from 'hasha';
 import { coerce } from 'semver';
 import { logger } from '../../logger';
 import { Http } from '../../util/http';
-import { UpdateDependencyConfig } from '../common';
+import type { UpdateDependencyConfig } from '../types';
 import { parseUrlPath } from './extract';
 import { isSpace, removeComments, skip } from './util';
 
@@ -157,11 +157,11 @@ export async function updateDependency({
   }
   let newSha256: string;
   try {
-    newUrl = `https://github.com/${upgrade.managerData.ownerName}/${
-      upgrade.managerData.repoName
-    }/releases/download/${upgrade.newValue}/${
-      upgrade.managerData.repoName
-    }-${coerce(upgrade.newValue)}.tar.gz`;
+    const ownerName = String(upgrade.managerData.ownerName);
+    const repoName = String(upgrade.managerData.repoName);
+    newUrl = `https://github.com/${ownerName}/${repoName}/releases/download/${
+      upgrade.newValue
+    }/${repoName}-${String(coerce(upgrade.newValue))}.tar.gz`;
     newSha256 = await fromStream(http.stream(newUrl), {
       algorithm: 'sha256',
     });
@@ -170,7 +170,9 @@ export async function updateDependency({
       `Failed to download release download for ${upgrade.depName} - trying archive instead`
     );
     try {
-      newUrl = `https://github.com/${upgrade.managerData.ownerName}/${upgrade.managerData.repoName}/archive/${upgrade.newValue}.tar.gz`;
+      const ownerName = String(upgrade.managerData.ownerName);
+      const repoName = String(upgrade.managerData.repoName);
+      newUrl = `https://github.com/${ownerName}/${repoName}/archive/${upgrade.newValue}.tar.gz`;
       newSha256 = await fromStream(http.stream(newUrl), {
         algorithm: 'sha256',
       });
@@ -181,6 +183,7 @@ export async function updateDependency({
       return fileContent;
     }
   }
+  // istanbul ignore next
   if (!newSha256) {
     logger.debug(
       `Failed to generate new sha256 for ${upgrade.depName} - update failed`

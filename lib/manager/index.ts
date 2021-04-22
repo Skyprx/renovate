@@ -11,17 +11,17 @@ import {
   LANGUAGE_RUBY,
   LANGUAGE_RUST,
 } from '../constants/languages';
-import { RangeStrategy } from '../types';
-import managers from './api.generated';
-import {
+import type { RangeStrategy } from '../types';
+import managers from './api';
+import type {
   ExtractConfig,
-  LookupUpdate,
   ManagerApi,
   PackageFile,
   PackageUpdateConfig,
+  PackageUpdateResult,
   RangeConfig,
   Result,
-} from './common';
+} from './types';
 
 const managerList = Array.from(managers.keys());
 
@@ -64,10 +64,7 @@ export async function extractAllPackageFiles(
     if (!res) {
       return null;
     }
-    return res.map((packageFile) => ({
-      ...packageFile,
-      managerPackageFileList: files,
-    }));
+    return res;
   }
   return null;
 }
@@ -75,7 +72,7 @@ export async function extractAllPackageFiles(
 export function getPackageUpdates(
   manager: string,
   config: PackageUpdateConfig
-): Result<LookupUpdate[]> | null {
+): Result<PackageUpdateResult> | null {
   if (!managers.has(manager)) {
     return null;
   }

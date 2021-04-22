@@ -1,10 +1,11 @@
+import { getName } from '../../../test/util';
 import {
   autoExtendMavenRange,
   compare,
   parseRange,
   rangeToStr,
 } from './compare';
-import maven from '.';
+import maven, { isValid as _isValid } from '.';
 
 const {
   isValid,
@@ -17,7 +18,7 @@ const {
   getNewValue,
 } = maven;
 
-describe('versioning/maven/compare', () => {
+describe(getName(__filename), () => {
   it('returns equality', () => {
     expect(compare('1.0.0', '1')).toEqual(0);
     expect(compare('1-a1', '1-alpha-1')).toEqual(0);
@@ -235,8 +236,10 @@ describe('versioning/maven/compare', () => {
       const fullRange = parseRange(rangeStr);
       expect(presetValue).toEqual(fullRange);
       if (fullRange === null) {
+        // eslint-disable-next-line jest/no-conditional-expect
         expect(presetValue).toBeNull();
       } else {
+        // eslint-disable-next-line jest/no-conditional-expect
         expect(rangeToStr(fullRange)).toEqual(rangeStr);
       }
     });
@@ -245,21 +248,37 @@ describe('versioning/maven/compare', () => {
     const sample = [
       ['[1.2.3]', '1.2.3', '[1.2.3]'],
       ['[1.2.3]', '1.2.4', '[1.2.4]'],
+      ['[1.0.0,1.2.3]', '0.0.1', '[1.0.0,1.2.3]'],
       ['[1.0.0,1.2.3]', '1.2.4', '[1.0.0,1.2.4]'],
       ['[1.0.0,1.2.23]', '1.1.0', '[1.0.0,1.2.23]'],
       ['(,1.0]', '2.0', '(,2.0]'],
       ['],1.0]', '2.0', '],2.0]'],
-      ['(,1.0)', '2.0', '(,2.0)'],
-      ['],1.0[', '2.0', '],2.0['],
-      ['[1.0,1.2],[1.3,1.5)', '1.2.4', '[1.0,1.2.4],[1.3,1.5)'],
-      ['[1.0,1.2],[1.3,1.5[', '1.2.4', '[1.0,1.2.4],[1.3,1.5['],
+      ['(,1.0)', '2.0', '(,3.0)'],
+      ['],1.0[', '2.0', '],3.0['],
+      ['[1.0,1.2.3],[1.3,1.5)', '1.2.4', '[1.0,1.2.4],[1.3,1.5)'],
+      ['[1.0,1.2.3],[1.3,1.5[', '1.2.4', '[1.0,1.2.4],[1.3,1.5['],
       ['[1.2.3,)', '1.2.4', '[1.2.4,)'],
       ['[1.2.3,[', '1.2.4', '[1.2.4,['],
       ['[1.2.3,]', '1.2.4', '[1.2.3,]'], // invalid range
       ['[0.21,0.22)', '0.20.21', '[0.21,0.22)'],
       ['[0.21,0.22)', '0.21.1', '[0.21,0.22)'],
-      ['[0.21,0.22)', '0.22.1', '[0.21,0.22.1)'],
-      ['[0.21,0.22)', '0.23', '[0.21,0.23)'],
+      ['[0.21,0.22.0)', '0.22.1', '[0.21,0.22.2)'],
+      ['[0.21,0.22)', '0.23', '[0.23,0.24)'],
+
+      ['[1.8,1.9)', '1.9.0.1', '[1.9,1.10)'],
+      ['[1.8a,1.9)', '1.9.0.1', '[1.8a,1.10)'],
+      ['[1.8,1.9.0)', '1.9.0.1', '[1.8,1.10.0)'],
+      ['[1.8,1.9.0.0)', '1.9.0.1', '[1.8,1.9.0.2)'],
+      ['[1.8,1.9.0.0)', '1.10.1', '[1.8,1.10.2.0)'],
+
+      ['[1.8,1.9)', '1.9.1', '[1.9,1.10)'],
+      ['[1.8,1.9)', '1.10.0', '[1.10,1.11)'],
+      ['[1.8,1.9)', '1.10.1', '[1.10,1.11)'],
+
+      ['(,1.0.0]', '2.0.0', '(,2.0.0]'],
+      ['(,1.0]', '2.0.0', '(,2.0]'],
+      ['(,1]', '2.0.0', '(,2]'],
+      ['(,1.0.0-foobar]', '2.0.0', '(,2.0.0]'],
     ];
     sample.forEach(([oldRepr, newValue, newRepr]) => {
       expect(autoExtendMavenRange(oldRepr, newValue)).toEqual(newRepr);
@@ -267,11 +286,12 @@ describe('versioning/maven/compare', () => {
   });
 });
 
-describe('versioning/maven/index', () => {
+describe(getName(__filename), () => {
   it('returns valid', () => {
     expect(isValid('1.0.0')).toBe(true);
     expect(isValid('[1.12.6,1.18.6]')).toBe(true);
     expect(isValid(undefined)).toBe(false);
+    expect(isValid === _isValid).toBe(true);
   });
   it('validates version string', () => {
     expect(isVersion('')).toBe(false);
@@ -289,6 +309,11 @@ describe('versioning/maven/index', () => {
     expect(isVersion('-1')).toBe(false);
     expect(isVersion('1-')).toBe(false);
     expect(isVersion('[1.12.6,1.18.6]')).toBe(false);
+    expect(isVersion('RELEASE')).toBe(false);
+    expect(isVersion('release')).toBe(false);
+    expect(isVersion('LATEST')).toBe(false);
+    expect(isVersion('latest')).toBe(false);
+    expect(isVersion('foobar')).toBe(true);
   });
   it('checks if version is stable', () => {
     expect(isStable('')).toBeNull();
@@ -363,21 +388,21 @@ describe('versioning/maven/index', () => {
 
   it('api', () => {
     expect(maven.isGreaterThan('1.1', '1')).toBe(true);
-    expect(maven.maxSatisfyingVersion(['1'], '1')).toBe('1');
+    expect(maven.getSatisfyingVersion(['1'], '1')).toBe('1');
     expect(
       maven.getNewValue({
         currentValue: '1',
         rangeStrategy: null,
-        fromVersion: null,
-        toVersion: '1.1',
+        currentVersion: null,
+        newVersion: '1.1',
       })
     ).toBe('1.1');
     expect(
       maven.getNewValue({
         currentValue: '[1.2.3,]',
         rangeStrategy: null,
-        fromVersion: null,
-        toVersion: '1.2.4',
+        currentVersion: null,
+        newVersion: '1.2.4',
       })
     ).toBe('[1.2.3,]');
   });
@@ -395,15 +420,15 @@ describe('versioning/maven/index', () => {
       ['[1.2.3,)', '1.2.3', '1.2.4'],
       ['[1.2.3,[', '1.2.3', '1.2.4'],
     ];
-    sample.forEach(([currentValue, fromVersion, toVersion]) => {
+    sample.forEach(([currentValue, currentVersion, newVersion]) => {
       expect(
         getNewValue({
           currentValue,
           rangeStrategy: 'pin',
-          fromVersion,
-          toVersion,
+          currentVersion,
+          newVersion,
         })
-      ).toEqual(toVersion);
+      ).toEqual(newVersion);
     });
   });
 });

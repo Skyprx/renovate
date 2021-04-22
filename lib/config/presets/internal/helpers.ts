@@ -1,22 +1,14 @@
-import { Preset } from '../common';
+import type { Preset } from '../types';
 
 export const presets: Record<string, Preset> = {
   disableTypesNodeMajor: {
     packageRules: [
       {
-        packageNames: ['@types/node'],
-        major: {
-          enabled: false,
-        },
+        matchPackageNames: ['@types/node'],
+        matchUpdateTypes: ['major'],
+        enabled: false,
       },
     ],
-  },
-  oddIsUnstable: {
-    description: 'DEPRECATED: Odd version numbers are classified as unstable',
-  },
-  oddIsUnstablePackages: {
-    description:
-      'DEPRECATED: Preconfigure dependencies where an odd major version indicates unstable (Docker-only)',
   },
   followTypescriptNext: {
     description:

@@ -1,8 +1,8 @@
 import { compare, ltr, maxSatisfying, minSatisfying, satisfies } from 'semver';
 import { CONFIG_VALIDATION } from '../../constants/error-messages';
 import { regEx } from '../../util/regex';
-import { VersioningApiConstructor } from '../common';
 import { GenericVersion, GenericVersioningApi } from '../loose/generic';
+import type { VersioningApiConstructor } from '../types';
 
 export const id = 'regex';
 export const displayName = 'Regular Expression';
@@ -55,7 +55,7 @@ export class RegExpVersioningApi extends GenericVersioningApi<RegExpVersion> {
       !new_config.includes('<patch>')
     ) {
       const error = new Error(CONFIG_VALIDATION);
-      error.configFile = new_config;
+      error.location = new_config;
       error.validationError =
         'regex versioning needs at least one major, minor or patch group defined';
       throw error;
@@ -106,7 +106,7 @@ export class RegExpVersioningApi extends GenericVersioningApi<RegExpVersion> {
     return ltr(asSemver(this._parse(version)), asSemver(this._parse(range)));
   }
 
-  maxSatisfyingVersion(versions: string[], range: string): string | null {
+  getSatisfyingVersion(versions: string[], range: string): string | null {
     return maxSatisfying(
       versions.map((v) => asSemver(this._parse(v))),
       asSemver(this._parse(range))

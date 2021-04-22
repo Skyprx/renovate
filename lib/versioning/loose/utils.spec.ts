@@ -1,6 +1,7 @@
+import { getName } from '../../../test/util';
 import { GenericVersion, GenericVersioningApi } from './generic';
 
-describe('loose/utils', () => {
+describe(getName(__filename), () => {
   const optionalFunctions = [
     'isLessThanRange',
     'valueToVersion',
@@ -46,7 +47,7 @@ describe('loose/utils', () => {
     const schemeKeys = getAllPropertyNames(api)
       .filter((val) => !optionalFunctions.includes(val) && !val.startsWith('_'))
       .filter(
-        (val) => !['minSatisfyingVersion', 'maxSatisfyingVersion'].includes(val)
+        (val) => !['minSatisfyingVersion', 'getSatisfyingVersion'].includes(val)
       )
       .sort();
 
@@ -66,8 +67,8 @@ describe('loose/utils', () => {
     it('minSatisfyingVersion', () => {
       expect(api.minSatisfyingVersion([''], '')).toBeNull();
     });
-    it('maxSatisfyingVersion', () => {
-      expect(api.maxSatisfyingVersion([''], '')).toBeNull();
+    it('getSatisfyingVersion', () => {
+      expect(api.getSatisfyingVersion([''], '')).toBeNull();
     });
   });
 });

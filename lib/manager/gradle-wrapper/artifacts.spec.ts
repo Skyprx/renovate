@@ -1,32 +1,33 @@
 /* eslint jest/no-standalone-expect: 0 */
 import { exec as _exec } from 'child_process';
-import { resolve } from 'path';
 import { readFile } from 'fs-extra';
-import Git from 'simple-git/promise';
-import { envMock, mockExecAll } from '../../../test/execUtil';
-import * as httpMock from '../../../test/httpMock';
+import { resolve } from 'upath';
+import { envMock, mockExecAll } from '../../../test/exec-util';
+import * as httpMock from '../../../test/http-mock';
 import {
   addReplacingSerializer,
   env,
   fs,
   getName,
+  git,
   partial,
-  platform,
 } from '../../../test/util';
 import { setUtilConfig } from '../../util';
 import { BinarySource } from '../../util/exec/common';
 import { resetPrefetchedImages } from '../../util/exec/docker';
+import { StatusResult } from '../../util/git';
 import * as dcUpdate from '.';
 
 jest.mock('child_process');
 jest.mock('../../util/fs');
+jest.mock('../../util/git');
 jest.mock('../../util/exec/env');
 
 const exec: jest.Mock<typeof _exec> = _exec as any;
 const fixtures = resolve(__dirname, './__fixtures__');
 const config = {
   localDir: resolve(fixtures, './testFiles'),
-  toVersion: '5.6.4',
+  newValue: '5.6.4',
 };
 const dockerConfig = { ...config, binarySource: BinarySource.Docker };
 
@@ -59,23 +60,23 @@ describe(getName(__filename), () => {
   });
 
   it('replaces existing value', async () => {
-    platform.getRepoStatus.mockResolvedValue({
+    git.getRepoStatus.mockResolvedValue({
       modified: [
         'gradle/wrapper/gradle-wrapper.properties',
         'gradlew',
         'gradlew.bat',
       ],
-    } as Git.StatusResult);
+    } as StatusResult);
 
     const execSnapshots = mockExecAll(exec);
 
     const res = await dcUpdate.updateArtifacts({
-      packageFileName: 'gradle-wrapper.properties',
+      packageFileName: 'gradle/wrapper/gradle-wrapper.properties',
       updatedDeps: [],
       newPackageFileContent: await readString(
         `./expectedFiles/gradle/wrapper/gradle-wrapper.properties`
       ),
-      config: { ...config, toVersion: '6.3' },
+      config: { ...config, newValue: '6.3' },
     });
 
     expect(res).toEqual(
@@ -83,14 +84,12 @@ describe(getName(__filename), () => {
         'gradle/wrapper/gradle-wrapper.properties',
         'gradlew',
         'gradlew.bat',
-      ].map((fileProjectPath) => {
-        return {
-          file: {
-            name: fileProjectPath,
-            contents: 'test',
-          },
-        };
-      })
+      ].map((fileProjectPath) => ({
+        file: {
+          name: fileProjectPath,
+          contents: 'test',
+        },
+      }))
     );
     expect(execSnapshots).toMatchSnapshot();
   });
@@ -110,8 +109,8 @@ describe(getName(__filename), () => {
 
   it('gradlew failed', async () => {
     const execSnapshots = mockExecAll(exec, new Error('failed'));
-    platform.getRepoStatus.mockResolvedValueOnce(
-      partial<Git.StatusResult>({
+    git.getRepoStatus.mockResolvedValueOnce(
+      partial<StatusResult>({
         modified: [],
       })
     );
@@ -135,8 +134,8 @@ describe(getName(__filename), () => {
         '038794feef1f4745c6347107b6726279d1c824f3fc634b60f86ace1e9fbd1768'
       );
 
-    platform.getRepoStatus.mockResolvedValueOnce(
-      partial<Git.StatusResult>({
+    git.getRepoStatus.mockResolvedValueOnce(
+      partial<StatusResult>({
         modified: ['gradle/wrapper/gradle-wrapper.properties'],
       })
     );
@@ -157,7 +156,7 @@ describe(getName(__filename), () => {
     expect(httpMock.getTrace()).toEqual([
       {
         headers: {
-          'accept-encoding': 'gzip, deflate',
+          'accept-encoding': 'gzip, deflate, br',
           host: 'services.gradle.org',
           'user-agent': 'https://github.com/renovatebot/renovate',
         },
@@ -192,7 +191,7 @@ describe(getName(__filename), () => {
     expect(httpMock.getTrace()).toEqual([
       {
         headers: {
-          'accept-encoding': 'gzip, deflate',
+          'accept-encoding': 'gzip, deflate, br',
           host: 'services.gradle.org',
           'user-agent': 'https://github.com/renovatebot/renovate',
         },

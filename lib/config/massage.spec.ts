@@ -1,7 +1,8 @@
+import { getName } from '../../test/util';
 import * as massage from './massage';
-import { RenovateConfig } from '.';
+import type { RenovateConfig } from './types';
 
-describe('config/massage', () => {
+describe(getName(__filename), () => {
   describe('massageConfig', () => {
     it('returns empty', () => {
       const config: RenovateConfig = {};
@@ -21,11 +22,11 @@ describe('config/massage', () => {
       };
       expect(massage.massageConfig(config)).toMatchSnapshot();
     });
-    it('massages packageRules updateTypes', () => {
+    it('massages packageRules matchUpdateTypes', () => {
       const config: RenovateConfig = {
         packageRules: [
           {
-            packageNames: ['foo'],
+            matchPackageNames: ['foo'],
             minor: {
               semanticCommitType: 'feat',
             },

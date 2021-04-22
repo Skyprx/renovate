@@ -3,8 +3,17 @@ import is from '@sindresorhus/is';
 import { PLATFORM_TYPE_GITHUB } from '../constants/platforms';
 import * as datasourceDocker from '../datasource/docker';
 import { logger } from '../logger';
-import { RenovateConfig } from './common';
-import { RenovateOptions, getOptions } from './definitions';
+import { getOptions } from './definitions';
+import type { GlobalConfig, RenovateOptions } from './types';
+
+// istanbul ignore if
+if (process.env.ENV_PREFIX) {
+  for (const [key, val] of Object.entries(process.env)) {
+    if (key.startsWith(process.env.ENV_PREFIX)) {
+      process.env[key.replace(process.env.ENV_PREFIX, 'RENOVATE_')] = val;
+    }
+  }
+}
 
 export function getEnvName(option: Partial<RenovateOptions>): string {
   if (option.env === false) {
@@ -17,10 +26,22 @@ export function getEnvName(option: Partial<RenovateOptions>): string {
   return `RENOVATE_${nameWithUnderscores.toUpperCase()}`;
 }
 
-export function getConfig(env: NodeJS.ProcessEnv): RenovateConfig {
+export function getConfig(env: NodeJS.ProcessEnv): GlobalConfig {
   const options = getOptions();
 
-  const config: RenovateConfig = { hostRules: [] };
+  let config: GlobalConfig = {};
+
+  if (env.RENOVATE_CONFIG) {
+    try {
+      config = JSON.parse(env.RENOVATE_CONFIG);
+      logger.debug({ config }, 'Detected config in env RENOVATE_CONFIG');
+    } catch (err) /* istanbul ignore next */ {
+      logger.fatal({ err }, 'Could not parse RENOVATE_CONFIG');
+      process.exit(1);
+    }
+  }
+
+  config.hostRules ||= [];
 
   const coersions = {
     boolean: (val: string): boolean => val === 'true',

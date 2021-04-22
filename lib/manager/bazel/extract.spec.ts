@@ -1,8 +1,19 @@
 import { readFileSync } from 'fs';
+import { getName } from '../../../test/util';
 import { extractPackageFile } from './extract';
 
 const workspaceFile = readFileSync(
   'lib/manager/bazel/__fixtures__/WORKSPACE1',
+  'utf8'
+);
+
+const workspace2File = readFileSync(
+  'lib/manager/bazel/__fixtures__/WORKSPACE2',
+  'utf8'
+);
+
+const workspace3File = readFileSync(
+  'lib/manager/bazel/__fixtures__/WORKSPACE3',
   'utf8'
 );
 
@@ -11,7 +22,7 @@ const fileWithBzlExtension = readFileSync(
   'utf8'
 );
 
-describe('lib/manager/bazel/extract', () => {
+describe(getName(__filename), () => {
   describe('extractPackageFile()', () => {
     it('returns empty if fails to parse', () => {
       const res = extractPackageFile('blahhhhh:foo:@what\n');
@@ -23,6 +34,15 @@ describe('lib/manager/bazel/extract', () => {
     });
     it('extracts multiple types of dependencies', () => {
       const res = extractPackageFile(workspaceFile);
+      expect(res.deps).toHaveLength(14);
+      expect(res.deps).toMatchSnapshot();
+    });
+    it('extracts github tags', () => {
+      const res = extractPackageFile(workspace2File);
+      expect(res.deps).toMatchSnapshot();
+    });
+    it('handle comments and strings', () => {
+      const res = extractPackageFile(workspace3File);
       expect(res.deps).toMatchSnapshot();
     });
     it('extracts dependencies from *.bzl files', () => {

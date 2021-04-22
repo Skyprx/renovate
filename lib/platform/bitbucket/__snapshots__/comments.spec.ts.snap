@@ -1,11 +1,11 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`platform/comments ensureComment() add comment if not found 1`] = `
+exports[`platform/bitbucket/comments ensureComment() add comment if not found 1`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "host": "api.bitbucket.org",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
@@ -16,8 +16,8 @@ Array [
     "body": "{\\"content\\":{\\"raw\\":\\"### topic\\\\n\\\\ncontent\\"}}",
     "headers": Object {
       "accept": "application/json",
-      "accept-encoding": "gzip, deflate",
-      "content-length": 42,
+      "accept-encoding": "gzip, deflate, br",
+      "content-length": "42",
       "content-type": "application/json",
       "host": "api.bitbucket.org",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -28,12 +28,12 @@ Array [
 ]
 `;
 
-exports[`platform/comments ensureComment() add updates comment if necessary 1`] = `
+exports[`platform/bitbucket/comments ensureComment() add updates comment if necessary 1`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "host": "api.bitbucket.org",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
@@ -44,8 +44,8 @@ Array [
     "body": "{\\"content\\":{\\"raw\\":\\"### some-subject\\\\n\\\\nsome\\\\ncontent\\"}}",
     "headers": Object {
       "accept": "application/json",
-      "accept-encoding": "gzip, deflate",
-      "content-length": 55,
+      "accept-encoding": "gzip, deflate, br",
+      "content-length": "55",
       "content-type": "application/json",
       "host": "api.bitbucket.org",
       "user-agent": "https://github.com/renovatebot/renovate",
@@ -56,12 +56,12 @@ Array [
 ]
 `;
 
-exports[`platform/comments ensureComment() does not throw 1`] = `
+exports[`platform/bitbucket/comments ensureComment() does not throw 1`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "host": "api.bitbucket.org",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
@@ -71,12 +71,12 @@ Array [
 ]
 `;
 
-exports[`platform/comments ensureComment() skips comment 1`] = `
+exports[`platform/bitbucket/comments ensureComment() skips comment 1`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "host": "api.bitbucket.org",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
@@ -86,12 +86,12 @@ Array [
 ]
 `;
 
-exports[`platform/comments ensureCommentRemoval() deletes comment by content if found 1`] = `
+exports[`platform/bitbucket/comments ensureCommentRemoval() deletes comment by content if found 1`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "host": "api.bitbucket.org",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
@@ -101,7 +101,7 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "host": "api.bitbucket.org",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
@@ -111,12 +111,12 @@ Array [
 ]
 `;
 
-exports[`platform/comments ensureCommentRemoval() deletes comment by topic if found 1`] = `
+exports[`platform/bitbucket/comments ensureCommentRemoval() deletes comment by topic if found 1`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "host": "api.bitbucket.org",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
@@ -126,7 +126,7 @@ Array [
   Object {
     "headers": Object {
       "accept": "application/json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "host": "api.bitbucket.org",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
@@ -136,12 +136,12 @@ Array [
 ]
 `;
 
-exports[`platform/comments ensureCommentRemoval() deletes nothing 1`] = `
+exports[`platform/bitbucket/comments ensureCommentRemoval() deletes nothing 1`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "host": "api.bitbucket.org",
       "user-agent": "https://github.com/renovatebot/renovate",
     },
@@ -151,12 +151,12 @@ Array [
 ]
 `;
 
-exports[`platform/comments ensureCommentRemoval() does not throw 1`] = `
+exports[`platform/bitbucket/comments ensureCommentRemoval() does not throw 1`] = `
 Array [
   Object {
     "headers": Object {
       "accept": "application/json",
-      "accept-encoding": "gzip, deflate",
+      "accept-encoding": "gzip, deflate, br",
       "host": "api.bitbucket.org",
       "user-agent": "https://github.com/renovatebot/renovate",
     },

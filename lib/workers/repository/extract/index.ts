@@ -1,12 +1,10 @@
 import is from '@sindresorhus/is';
-import {
-  RenovateConfig,
-  getManagerConfig,
-  mergeChildConfig,
-} from '../../../config';
+import { getManagerConfig, mergeChildConfig } from '../../../config';
+import type { RenovateConfig } from '../../../config/types';
 import { logger } from '../../../logger';
 import { getManagerList } from '../../../manager';
-import { PackageFile } from '../../../manager/common';
+import type { PackageFile } from '../../../manager/types';
+import { getFileList } from '../../../util/git';
 import { getMatchingFiles } from './file-match';
 import { getManagerPackageFiles } from './manager-files';
 
@@ -21,29 +19,27 @@ export async function extractAllDependencies(
     );
   }
   const extractList: RenovateConfig[] = [];
+  const fileList = await getFileList();
+
+  const tryConfig = (extractConfig: RenovateConfig): void => {
+    const matchingFileList = getMatchingFiles(extractConfig, fileList);
+    if (matchingFileList.length) {
+      extractList.push({ ...extractConfig, fileList: matchingFileList });
+    }
+  };
+
   for (const manager of managerList) {
     const managerConfig = getManagerConfig(config, manager);
     managerConfig.manager = manager;
     if (manager === 'regex') {
       for (const regexManager of config.regexManagers) {
-        const regexManagerConfig = mergeChildConfig(
-          managerConfig,
-          regexManager
-        );
-        regexManagerConfig.fileList = await getMatchingFiles(
-          regexManagerConfig
-        );
-        if (regexManagerConfig.fileList.length) {
-          extractList.push(regexManagerConfig);
-        }
+        tryConfig(mergeChildConfig(managerConfig, regexManager));
       }
     } else {
-      managerConfig.fileList = await getMatchingFiles(managerConfig);
-      if (managerConfig.fileList.length) {
-        extractList.push(managerConfig);
-      }
+      tryConfig(managerConfig);
     }
   }
+
   const extractResults = await Promise.all(
     extractList.map(async (managerConfig) => {
       const packageFiles = await getManagerPackageFiles(managerConfig);
@@ -53,7 +49,7 @@ export async function extractAllDependencies(
   const extractions: Record<string, PackageFile[]> = {};
   let fileCount = 0;
   for (const { manager, packageFiles } of extractResults) {
-    if (packageFiles && packageFiles.length) {
+    if (packageFiles?.length) {
       fileCount += packageFiles.length;
       logger.debug(`Found ${manager} package files`);
       extractions[manager] = (extractions[manager] || []).concat(packageFiles);

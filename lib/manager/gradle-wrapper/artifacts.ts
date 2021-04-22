@@ -1,18 +1,22 @@
-import { resolve } from 'path';
-import * as fs from 'fs-extra';
-import Git from 'simple-git/promise';
+import { stat } from 'fs-extra';
+import { resolve } from 'upath';
+import { TEMPORARY_ERROR } from '../../constants/error-messages';
 import { logger } from '../../logger';
-import { platform } from '../../platform';
 import { ExecOptions, exec } from '../../util/exec';
 import { readLocalFile, writeLocalFile } from '../../util/fs';
+import { StatusResult, getRepoStatus } from '../../util/git';
 import { Http } from '../../util/http';
-import { UpdateArtifact, UpdateArtifactsResult } from '../common';
-import { gradleWrapperFileName, prepareGradleCommand } from '../gradle/index';
+import {
+  extraEnv,
+  gradleWrapperFileName,
+  prepareGradleCommand,
+} from '../gradle/utils';
+import type { UpdateArtifact, UpdateArtifactsResult } from '../types';
 
 const http = new Http('gradle-wrapper');
 
 async function addIfUpdated(
-  status: Git.StatusResult,
+  status: StatusResult,
   fileProjectPath: string
 ): Promise<UpdateArtifactsResult | null> {
   if (status.modified.includes(fileProjectPath)) {
@@ -57,7 +61,7 @@ export async function updateArtifacts({
     let cmd = await prepareGradleCommand(
       gradlew,
       projectDir,
-      await fs.stat(gradlewPath).catch(() => null),
+      await stat(gradlewPath).catch(() => null),
       `wrapper`
     );
     if (!cmd) {
@@ -68,41 +72,53 @@ export async function updateArtifacts({
     if (distributionUrl) {
       cmd += ` --gradle-distribution-url ${distributionUrl}`;
       if (newPackageFileContent.includes('distributionSha256Sum=')) {
-        // need to reset version, otherwise we have a checksum missmatch
+        // need to reset version, otherwise we have a checksum mismatch
         await writeLocalFile(
           packageFileName,
-          newPackageFileContent.replace(config.toVersion, config.currentValue)
+          newPackageFileContent.replace(config.newValue, config.currentValue)
         );
         const checksum = await getDistributionChecksum(distributionUrl);
         cmd += ` --gradle-distribution-sha256-sum ${checksum}`;
       }
     } else {
-      cmd += ` --gradle-version ${config.toVersion}`;
+      cmd += ` --gradle-version ${config.newValue}`;
     }
     logger.debug(`Updating gradle wrapper: "${cmd}"`);
     const execOptions: ExecOptions = {
       docker: {
-        image: 'renovate/gradle',
+        image: 'gradle',
       },
+      extraEnv,
     };
     try {
       await exec(cmd, execOptions);
     } catch (err) {
-      // TODO: Is this an artifact error?
+      // istanbul ignore if
+      if (err.message === TEMPORARY_ERROR) {
+        throw err;
+      }
       logger.warn(
         { err },
         'Error executing gradle wrapper update command. It can be not a critical one though.'
       );
     }
-    const status = await platform.getRepoStatus();
+    const status = await getRepoStatus();
+    const artifactFileNames = [
+      'gradle/wrapper/gradle-wrapper.properties',
+      'gradle/wrapper/gradle-wrapper.jar',
+      'gradlew',
+      'gradlew.bat',
+    ].map(
+      (filename) =>
+        packageFileName
+          .replace('gradle/wrapper/', '')
+          .replace('gradle-wrapper.properties', '') + filename
+    );
     const updateArtifactsResult = (
       await Promise.all(
-        [
-          'gradle/wrapper/gradle-wrapper.properties',
-          'gradle/wrapper/gradle-wrapper.jar',
-          'gradlew',
-          'gradlew.bat',
-        ].map(async (fileProjectPath) => addIfUpdated(status, fileProjectPath))
+        artifactFileNames.map((fileProjectPath) =>
+          addIfUpdated(status, fileProjectPath)
+        )
       )
     ).filter((e) => e != null);
     logger.debug(

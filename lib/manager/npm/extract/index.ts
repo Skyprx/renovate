@@ -1,28 +1,24 @@
-import { dirname } from 'path';
 import is from '@sindresorhus/is';
 import validateNpmPackageName from 'validate-npm-package-name';
+import { getAdminConfig } from '../../../config/admin';
 import { CONFIG_VALIDATION } from '../../../constants/error-messages';
 import * as datasourceGithubTags from '../../../datasource/github-tags';
-import * as datasourceNpm from '../../../datasource/npm';
+import { id as npmId } from '../../../datasource/npm';
 import { logger } from '../../../logger';
 import { SkipReason } from '../../../types';
-import {
-  deleteLocalFile,
-  getSiblingFileName,
-  readLocalFile,
-} from '../../../util/fs';
+import { getSiblingFileName, readLocalFile } from '../../../util/fs';
 import * as nodeVersioning from '../../../versioning/node';
 import { isValid, isVersion } from '../../../versioning/npm';
-import {
+import type {
   ExtractConfig,
   NpmLockFiles,
   PackageDependency,
   PackageFile,
-} from '../../common';
-import { NpmPackage, NpmPackageDependeny } from './common';
+} from '../../types';
 import { getLockedVersions } from './locked-versions';
 import { detectMonorepos } from './monorepo';
 import { mightBeABrowserLibrary } from './type';
+import type { NpmPackage, NpmPackageDependency } from './types';
 
 function parseDepName(depType: string, key: string): string {
   if (depType !== 'resolutions') {
@@ -55,16 +51,16 @@ export async function extractPackageFile(
   }
   if (fileName !== 'package.json' && packageJson.renovate) {
     const error = new Error(CONFIG_VALIDATION);
-    error.configFile = fileName;
+    error.location = fileName;
     error.validationError =
-      'Nested package.json must not contain renovate configuration. Please use `packageRules` with `paths` in your main config instead.';
+      'Nested package.json must not contain renovate configuration. Please use `packageRules` with `matchPaths` in your main config instead.';
     throw error;
   }
   const packageJsonName = packageJson.name;
   logger.debug(
     `npm file ${fileName} has name ${JSON.stringify(packageJsonName)}`
   );
-  const packageJsonVersion = packageJson.version;
+  const packageFileVersion = packageJson.version;
   let yarnWorkspacesPackages: string[];
   if (is.array(packageJson.workspaces)) {
     yarnWorkspacesPackages = packageJson.workspaces;
@@ -95,47 +91,59 @@ export async function extractPackageFile(
   delete lockFiles.shrinkwrapJson;
 
   let npmrc: string;
-  let ignoreNpmrcFile: boolean;
   const npmrcFileName = getSiblingFileName(fileName, '.npmrc');
-  // istanbul ignore if
-  if (config.ignoreNpmrcFile) {
-    await deleteLocalFile(npmrcFileName);
-  } else {
-    npmrc = await readLocalFile(npmrcFileName, 'utf8');
-    if (npmrc && npmrc.includes('package-lock')) {
-      logger.debug('Stripping package-lock setting from npmrc');
-      npmrc = npmrc.replace(/(^|\n)package-lock.*?(\n|$)/g, '\n');
-    }
-    if (npmrc) {
-      if (npmrc.includes('=${') && !(global.trustLevel === 'high')) {
-        logger.debug('Discarding .npmrc file with variables');
-        ignoreNpmrcFile = true;
-        npmrc = undefined;
-        await deleteLocalFile(npmrcFileName);
-      }
+  const npmrcContent = await readLocalFile(npmrcFileName, 'utf8');
+  if (is.string(npmrcContent)) {
+    if (is.string(config.npmrc)) {
+      logger.debug(
+        { npmrcFileName },
+        'Repo .npmrc file is ignored due to presence of config.npmrc'
+      );
     } else {
-      npmrc = undefined;
+      npmrc = npmrcContent;
+      if (npmrc?.includes('package-lock')) {
+        logger.debug('Stripping package-lock setting from .npmrc');
+        npmrc = npmrc.replace(/(^|\n)package-lock.*?(\n|$)/g, '\n');
+      }
+      if (npmrc.includes('=${') && !getAdminConfig().exposeAllEnv) {
+        logger.debug(
+          { npmrcFileName },
+          'Stripping .npmrc file of lines with variables'
+        );
+        npmrc = npmrc
+          .split('\n')
+          .filter((line) => !line.includes('=${'))
+          .join('\n');
+      }
     }
   }
   const yarnrcFileName = getSiblingFileName(fileName, '.yarnrc');
-  const yarnrc = (await readLocalFile(yarnrcFileName, 'utf8')) || undefined;
+  let yarnrc;
+  if (!is.string(config.yarnrc)) {
+    yarnrc = (await readLocalFile(yarnrcFileName, 'utf8')) || undefined;
+  }
 
-  let lernaDir: string;
+  let lernaJsonFile: string;
   let lernaPackages: string[];
   let lernaClient: 'yarn' | 'npm';
-  let hasFileRefs = false;
-  let lernaJson: { packages: string[]; npmClient: string };
+  let hasFancyRefs = false;
+  let lernaJson: {
+    packages: string[];
+    npmClient: string;
+    useWorkspaces?: boolean;
+  };
   try {
-    const lernaJsonFileName = getSiblingFileName(fileName, 'lerna.json');
-    lernaJson = JSON.parse(await readLocalFile(lernaJsonFileName, 'utf8'));
+    lernaJsonFile = getSiblingFileName(fileName, 'lerna.json');
+    lernaJson = JSON.parse(await readLocalFile(lernaJsonFile, 'utf8'));
   } catch (err) /* istanbul ignore next */ {
     logger.warn({ err }, 'Could not parse lerna.json');
   }
-  if (lernaJson) {
-    lernaDir = dirname(fileName);
+  if (lernaJson && !lernaJson.useWorkspaces) {
     lernaPackages = lernaJson.packages;
     lernaClient =
       lernaJson.npmClient === 'yarn' || lockFiles.yarnLock ? 'yarn' : 'npm';
+  } else {
+    lernaJsonFile = undefined;
   }
 
   const depTypes = {
@@ -148,7 +156,7 @@ export async function extractPackageFile(
     resolutions: 'resolutions',
   };
 
-  const compatibility: Record<string, any> = {};
+  const constraints: Record<string, any> = {};
 
   function extractDependency(
     depType: string,
@@ -170,19 +178,23 @@ export async function extractPackageFile(
         dep.datasource = datasourceGithubTags.id;
         dep.lookupName = 'nodejs/node';
         dep.versioning = nodeVersioning.id;
-        compatibility.node = dep.currentValue;
+        constraints.node = dep.currentValue;
       } else if (depName === 'yarn') {
-        dep.datasource = datasourceNpm.id;
+        dep.datasource = npmId;
         dep.commitMessageTopic = 'Yarn';
-        compatibility.yarn = dep.currentValue;
+        constraints.yarn = dep.currentValue;
       } else if (depName === 'npm') {
-        dep.datasource = datasourceNpm.id;
+        dep.datasource = npmId;
         dep.commitMessageTopic = 'npm';
-        compatibility.npm = dep.currentValue;
+        constraints.npm = dep.currentValue;
       } else if (depName === 'pnpm') {
-        dep.datasource = datasourceNpm.id;
+        dep.datasource = npmId;
         dep.commitMessageTopic = 'pnpm';
-        compatibility.pnpm = dep.currentValue;
+        constraints.pnpm = dep.currentValue;
+      } else if (depName === 'vscode') {
+        dep.datasource = datasourceGithubTags.id;
+        dep.lookupName = 'microsoft/vscode';
+        constraints.vscode = dep.currentValue;
       } else {
         dep.skipReason = SkipReason.UnknownEngines;
       }
@@ -199,7 +211,7 @@ export async function extractPackageFile(
         dep.lookupName = 'nodejs/node';
         dep.versioning = nodeVersioning.id;
       } else if (depName === 'yarn') {
-        dep.datasource = datasourceNpm.id;
+        dep.datasource = npmId;
         dep.commitMessageTopic = 'Yarn';
       } else {
         dep.skipReason = SkipReason.UnknownVolta;
@@ -212,6 +224,7 @@ export async function extractPackageFile(
 
     if (dep.currentValue.startsWith('npm:')) {
       dep.npmPackageAlias = true;
+      hasFancyRefs = true;
       const valSplit = dep.currentValue.replace('npm:', '').split('@');
       if (valSplit.length === 2) {
         dep.lookupName = valSplit[0];
@@ -225,11 +238,11 @@ export async function extractPackageFile(
     }
     if (dep.currentValue.startsWith('file:')) {
       dep.skipReason = SkipReason.File;
-      hasFileRefs = true;
+      hasFancyRefs = true;
       return dep;
     }
     if (isValid(dep.currentValue)) {
-      dep.datasource = datasourceNpm.id;
+      dep.datasource = npmId;
       if (dep.currentValue === '*') {
         dep.skipReason = SkipReason.AnyVersion;
       }
@@ -292,21 +305,20 @@ export async function extractPackageFile(
     if (packageJson[depType]) {
       try {
         for (const [key, val] of Object.entries(
-          packageJson[depType] as NpmPackageDependeny
+          packageJson[depType] as NpmPackageDependency
         )) {
           const depName = parseDepName(depType, key);
-          const dep: PackageDependency = {
+          let dep: PackageDependency = {
             depType,
             depName,
           };
           if (depName !== key) {
             dep.managerData = { key };
           }
-          Object.assign(dep, extractDependency(depType, depName, val));
+          dep = { ...dep, ...extractDependency(depType, depName, val) };
           if (depName === 'node') {
             // This is a special case for Node.js to group it together with other managers
             dep.commitMessageTopic = 'Node.js';
-            dep.major = { enabled: false };
           }
           dep.prettyDepType = depTypes[depType];
           deps.push(dep);
@@ -322,9 +334,9 @@ export async function extractPackageFile(
     if (
       !(
         packageJsonName ||
-        packageJsonVersion ||
+        packageFileVersion ||
         npmrc ||
-        lernaDir ||
+        lernaJsonFile ||
         yarnWorkspacesPackages
       )
     ) {
@@ -334,11 +346,11 @@ export async function extractPackageFile(
   }
   let skipInstalls = config.skipInstalls;
   if (skipInstalls === null) {
-    if (hasFileRefs) {
-      // https://npm.community/t/npm-i-package-lock-only-changes-lock-file-incorrectly-when-file-references-used-in-dependencies/1412
+    if (hasFancyRefs) {
+      // https://github.com/npm/cli/issues/1432
       // Explanation:
-      //  - npm install --package-lock-only is buggy for transitive deps in file: references
-      //  - So we set skipInstalls to false if file: refs are found *and* the user hasn't explicitly set the value already
+      //  - npm install --package-lock-only is buggy for transitive deps in file: and npm: references
+      //  - So we set skipInstalls to false if file: or npm: refs are found *and* the user hasn't explicitly set the value already
       logger.debug('Automatically setting skipInstalls to false');
       skipInstalls = false;
     } else {
@@ -349,23 +361,27 @@ export async function extractPackageFile(
   return {
     deps,
     packageJsonName,
-    packageJsonVersion,
+    packageFileVersion,
     packageJsonType,
     npmrc,
-    ignoreNpmrcFile,
     yarnrc,
     ...lockFiles,
-    lernaDir,
+    managerData: {
+      lernaJsonFile,
+    },
     lernaClient,
     lernaPackages,
     skipInstalls,
     yarnWorkspacesPackages,
-    compatibility,
+    constraints,
   };
 }
 
-export async function postExtract(packageFiles: PackageFile[]): Promise<void> {
-  detectMonorepos(packageFiles);
+export async function postExtract(
+  packageFiles: PackageFile[],
+  updateInternalDeps: boolean
+): Promise<void> {
+  detectMonorepos(packageFiles, updateInternalDeps);
   await getLockedVersions(packageFiles);
 }
 
@@ -389,6 +405,6 @@ export async function extractAllPackageFiles(
       logger.debug({ packageFile }, 'packageFile has no content');
     }
   }
-  await postExtract(npmFiles);
+  await postExtract(npmFiles, config.updateInternalDeps);
   return npmFiles;
 }

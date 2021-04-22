@@ -1,7 +1,6 @@
-FROM mcr.microsoft.com/vscode/devcontainers/typescript-node:0.122.1-14@sha256:3b67297f5c032d61899a54fcf22b2f53adc7a085a35540f0a698332b1a072832
+FROM containerbase/buildpack@sha256:8d0bd58e02d271304e6ab378aede3927dd2cfb98cdae59d0e8bf6f66a5393963
 
-# see https://mcr.microsoft.com/v2/vscode/devcontainers/typescript-node/tags/list for tags
-# Add missing renovate dev tools
-RUN DEBIAN_FRONTEND=noninteractive apt-get update \
-   && apt-get -y install --no-install-recommends --no-upgrade build-essential \
-   && rm -rf /var/lib/apt/lists/*
+# renovate: datasource=docker versioning=docker
+RUN install-tool node 14.16.1 \
+# renovate: datasource=npm
+  && install-tool yarn 1.22.10

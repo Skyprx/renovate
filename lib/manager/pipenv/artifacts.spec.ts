@@ -1,19 +1,21 @@
 import { exec as _exec } from 'child_process';
 import _fs from 'fs-extra';
 import { join } from 'upath';
-import { envMock, mockExecAll } from '../../../test/execUtil';
-import { mocked, platform } from '../../../test/util';
-import { StatusResult } from '../../platform/git/storage';
+import { envMock, mockExecAll } from '../../../test/exec-util';
+import { git, mocked } from '../../../test/util';
 import { setUtilConfig } from '../../util';
 import { BinarySource } from '../../util/exec/common';
 import * as docker from '../../util/exec/docker';
 import * as _env from '../../util/exec/env';
+import { StatusResult } from '../../util/git';
 import * as pipenv from './artifacts';
 
 jest.mock('fs-extra');
 jest.mock('child_process');
 jest.mock('../../util/exec/env');
+jest.mock('../../util/git');
 jest.mock('../../util/host-rules');
+jest.mock('../../util/http');
 
 const fs: jest.Mocked<typeof _fs> = _fs as any;
 const exec: jest.Mock<typeof _exec> = _exec as any;
@@ -23,11 +25,10 @@ const config = {
   // `join` fixes Windows CI
   localDir: join('/tmp/github/some/repo'),
   cacheDir: join('/tmp/renovate/cache'),
-  dockerUser: 'foobar',
 };
 
 const dockerConfig = { ...config, binarySource: BinarySource.Docker };
-const lockMaintenceConfig = { ...config, isLockFileMaintenance: true };
+const lockMaintenanceConfig = { ...config, isLockFileMaintenance: true };
 
 describe('.updateArtifacts()', () => {
   let pipFileLock;
@@ -41,7 +42,11 @@ describe('.updateArtifacts()', () => {
 
     await setUtilConfig(config);
     docker.resetPrefetchedImages();
-    pipFileLock = { _meta: { requires: {} } };
+    pipFileLock = {
+      _meta: { requires: {} },
+      default: { pipenv: {} },
+      develop: { pipenv: {} },
+    };
   });
 
   it('returns if no Pipfile.lock found', async () => {
@@ -86,7 +91,7 @@ describe('.updateArtifacts()', () => {
   it('returns updated Pipfile.lock', async () => {
     fs.readFile.mockResolvedValueOnce('current pipfile.lock' as any);
     const execSnapshots = mockExecAll(exec);
-    platform.getRepoStatus.mockResolvedValue({
+    git.getRepoStatus.mockResolvedValue({
       modified: ['Pipfile.lock'],
     } as StatusResult);
     fs.readFile.mockReturnValueOnce('New Pipfile.lock' as any);
@@ -95,7 +100,7 @@ describe('.updateArtifacts()', () => {
         packageFileName: 'Pipfile',
         updatedDeps: [],
         newPackageFileContent: 'some new content',
-        config: { ...config, compatibility: { python: '3.7' } },
+        config: { ...config, constraints: { python: '3.7' } },
       })
     ).not.toBeNull();
     expect(execSnapshots).toMatchSnapshot();
@@ -106,7 +111,7 @@ describe('.updateArtifacts()', () => {
     pipFileLock._meta.requires.python_version = '3.7';
     fs.readFile.mockResolvedValueOnce(JSON.stringify(pipFileLock) as any);
     const execSnapshots = mockExecAll(exec);
-    platform.getRepoStatus.mockResolvedValue({
+    git.getRepoStatus.mockResolvedValue({
       modified: ['Pipfile.lock'],
     } as StatusResult);
     fs.readFile.mockReturnValueOnce('new lock' as any);
@@ -137,7 +142,7 @@ describe('.updateArtifacts()', () => {
   it('returns updated Pipenv.lock when doing lockfile maintenance', async () => {
     fs.readFile.mockResolvedValueOnce('Current Pipfile.lock' as any);
     const execSnapshots = mockExecAll(exec);
-    platform.getRepoStatus.mockResolvedValue({
+    git.getRepoStatus.mockResolvedValue({
       modified: ['Pipfile.lock'],
     } as StatusResult);
     fs.readFile.mockReturnValueOnce('New Pipfile.lock' as any);
@@ -146,7 +151,67 @@ describe('.updateArtifacts()', () => {
         packageFileName: 'Pipfile',
         updatedDeps: [],
         newPackageFileContent: '{}',
-        config: lockMaintenceConfig,
+        config: lockMaintenanceConfig,
+      })
+    ).not.toBeNull();
+    expect(execSnapshots).toMatchSnapshot();
+  });
+  it('uses pipenv version from Pipfile', async () => {
+    jest.spyOn(docker, 'removeDanglingContainers').mockResolvedValueOnce();
+    await setUtilConfig(dockerConfig);
+    pipFileLock.default.pipenv.version = '==2020.8.13';
+    fs.readFile.mockResolvedValueOnce(JSON.stringify(pipFileLock) as any);
+    const execSnapshots = mockExecAll(exec);
+    git.getRepoStatus.mockResolvedValue({
+      modified: ['Pipfile.lock'],
+    } as StatusResult);
+    fs.readFile.mockReturnValueOnce('new lock' as any);
+    expect(
+      await pipenv.updateArtifacts({
+        packageFileName: 'Pipfile',
+        updatedDeps: [],
+        newPackageFileContent: 'some new content',
+        config: dockerConfig,
+      })
+    ).not.toBeNull();
+    expect(execSnapshots).toMatchSnapshot();
+  });
+  it('uses pipenv version from Pipfile dev packages', async () => {
+    jest.spyOn(docker, 'removeDanglingContainers').mockResolvedValueOnce();
+    await setUtilConfig(dockerConfig);
+    pipFileLock.develop.pipenv.version = '==2020.8.13';
+    fs.readFile.mockResolvedValueOnce(JSON.stringify(pipFileLock) as any);
+    const execSnapshots = mockExecAll(exec);
+    git.getRepoStatus.mockResolvedValue({
+      modified: ['Pipfile.lock'],
+    } as StatusResult);
+    fs.readFile.mockReturnValueOnce('new lock' as any);
+    expect(
+      await pipenv.updateArtifacts({
+        packageFileName: 'Pipfile',
+        updatedDeps: [],
+        newPackageFileContent: 'some new content',
+        config: dockerConfig,
+      })
+    ).not.toBeNull();
+    expect(execSnapshots).toMatchSnapshot();
+  });
+  it('uses pipenv version from config', async () => {
+    jest.spyOn(docker, 'removeDanglingContainers').mockResolvedValueOnce();
+    await setUtilConfig(dockerConfig);
+    pipFileLock.default.pipenv.version = '==2020.8.13';
+    fs.readFile.mockResolvedValueOnce(JSON.stringify(pipFileLock) as any);
+    const execSnapshots = mockExecAll(exec);
+    git.getRepoStatus.mockResolvedValue({
+      modified: ['Pipfile.lock'],
+    } as StatusResult);
+    fs.readFile.mockReturnValueOnce('new lock' as any);
+    expect(
+      await pipenv.updateArtifacts({
+        packageFileName: 'Pipfile',
+        updatedDeps: [],
+        newPackageFileContent: 'some new content',
+        config: { ...dockerConfig, constraints: { pipenv: '==2020.1.1' } },
       })
     ).not.toBeNull();
     expect(execSnapshots).toMatchSnapshot();
